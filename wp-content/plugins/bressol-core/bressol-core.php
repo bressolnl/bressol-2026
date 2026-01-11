@@ -12,14 +12,32 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-add_action('plugins_loaded', function () {
-    // Placeholder inicial: confirmamos que el plugin carga correctamente.
+/**
+ * Autoloader simple por namespaces (sin Composer por ahora).
+ * Más adelante podemos migrar a Composer si te interesa.
+ */
+spl_autoload_register(static function (string $class): void {
+    $prefixes = [
+        'Bressol\\Core\\'    => __DIR__ . '/src/Core/',
+        'Bressol\\Modules\\' => __DIR__ . '/src/Modules/',
+    ];
+
+    foreach ($prefixes as $prefix => $baseDir) {
+        if (strncmp($prefix, $class, strlen($prefix)) !== 0) {
+            continue;
+        }
+
+        $relativeClass = substr($class, strlen($prefix));
+        $file = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
+
+        if (is_readable($file)) {
+            require_once $file;
+        }
+    }
 });
 
-add_action('admin_notices', function () {
-    if (!current_user_can('manage_options')) {
-        return;
-    }
-
-    echo '<div class="notice notice-success"><p><strong>Bressol Core</strong> activo correctamente.</p></div>';
+add_action('plugins_loaded', static function (): void {
+    // Arranque central del plugin.
+    $plugin = new \Bressol\Core\Plugin();
+    $plugin->register();
 });
