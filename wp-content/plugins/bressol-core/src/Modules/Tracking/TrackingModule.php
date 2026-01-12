@@ -41,7 +41,8 @@ final class TrackingModule implements ModuleInterface
             WP_PLUGIN_DIR . '/bressol-core/bressol-core.php'
         );
 
-        wp_enqueue_script($handle, $src, ['jquery'], '0.1.0', true);
+        // Usa [] si tu tracking.js no depende de jQuery.
+        wp_enqueue_script($handle, $src, [], '0.1.0', true);
     }
 
     public function printBasePageViewEvent(): void
@@ -65,23 +66,34 @@ final class TrackingModule implements ModuleInterface
         if (!function_exists('WC') || !WC()->session) {
             return;
         }
-    
-        // add_to_cart (cola)
+
+        // 1) guided upsell add_to_cart (cola) — contexto
+        $guided = WC()->session->get('bressol_datalayer_guided_upsell');
+        if ($guided) {
+            WC()->session->__unset('bressol_datalayer_guided_upsell');
+
+            echo "\n<script>";
+            echo "window.dataLayer = window.dataLayer || [];";
+            echo "window.dataLayer.push(Object.assign({event:'guided_upsell_add_to_cart'}, " . wp_json_encode($guided) . "));";
+            echo "</script>\n";
+        }
+
+        // 2) add_to_cart (cola)
         $addPayload = WC()->session->get('bressol_datalayer_add_to_cart');
         if ($addPayload) {
             WC()->session->__unset('bressol_datalayer_add_to_cart');
-    
+
             echo "\n<script>";
             echo "window.dataLayer = window.dataLayer || [];";
             echo "window.dataLayer.push(Object.assign({event:'add_to_cart'}, " . wp_json_encode($addPayload) . "));";
             echo "</script>\n";
         }
-    
-        // remove_from_cart (cola)
+
+        // 3) remove_from_cart (cola)
         $removePayload = WC()->session->get('bressol_datalayer_remove_from_cart');
         if ($removePayload) {
             WC()->session->__unset('bressol_datalayer_remove_from_cart');
-    
+
             echo "\n<script>";
             echo "window.dataLayer = window.dataLayer || [];";
             echo "window.dataLayer.push(Object.assign({event:'remove_from_cart'}, " . wp_json_encode($removePayload) . "));";
