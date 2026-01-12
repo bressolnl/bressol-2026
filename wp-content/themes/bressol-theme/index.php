@@ -6,8 +6,17 @@ if (!defined('ABSPATH')) {
 get_header();
 
 echo '<main style="padding:24px;">';
-echo '<h1>Bressol Theme</h1>';
-echo '<p>Theme activo correctamente. Próximo paso: plantillas y bloques.</p>';
+
+if (have_posts()) {
+    while (have_posts()) {
+        the_post();
+        the_content();
+    }
+} else {
+    echo '<h1>Bressol Theme</h1>';
+    echo '<p>No hay contenido para mostrar.</p>';
+}
+
 echo '</main>';
 
 get_footer();
