@@ -30,5 +30,6 @@ final class Plugin
         $this->modules[] = new \Bressol\Modules\Tracking\TrackingModule();
         $this->modules[] = new \Bressol\Modules\Packs\PacksModule();
         $this->modules[] = new \Bressol\Modules\GuidedShopping\GuidedShoppingModule();
+        $this->modules[] = new \Bressol\Modules\Recommendations\RecommendationsModule();
     }
 }
