@@ -78,7 +78,18 @@ final class TrackingModule implements ModuleInterface
             echo "</script>\n";
         }
 
-        // 2) add_to_cart (cola)
+        // 2) reco click (cola)
+        $recoClick = WC()->session->get('bressol_datalayer_reco_click');
+        if ($recoClick) {
+            WC()->session->__unset('bressol_datalayer_reco_click');
+
+            echo "\n<script>";
+            echo "window.dataLayer = window.dataLayer || [];";
+            echo "window.dataLayer.push(Object.assign({event:'bressol_reco_click'}, " . wp_json_encode($recoClick) . "));";
+            echo "</script>\n";
+        }
+
+        // 3) add_to_cart (cola)
         $addPayload = WC()->session->get('bressol_datalayer_add_to_cart');
         if ($addPayload) {
             WC()->session->__unset('bressol_datalayer_add_to_cart');
@@ -89,7 +100,7 @@ final class TrackingModule implements ModuleInterface
             echo "</script>\n";
         }
 
-        // 3) remove_from_cart (cola)
+        // 4) remove_from_cart (cola)
         $removePayload = WC()->session->get('bressol_datalayer_remove_from_cart');
         if ($removePayload) {
             WC()->session->__unset('bressol_datalayer_remove_from_cart');
