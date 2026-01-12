@@ -1,2 +1,7 @@
+# WordPress generated content
+wp-content/uploads/
+wp-content/cache/
+wp-content/upgrade/
+
 # Plugins de terceros (NO versionar)
 wp-content/plugins/woocommerce/
