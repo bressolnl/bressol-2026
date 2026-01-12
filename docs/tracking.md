@@ -53,3 +53,23 @@ Ejemplo:
 
 Notas:
 - Si el producto es variable, se usa variation_id como referencia principal.
+
+### begin_checkout
+Se envía cuando el usuario entra en la página de checkout (no en order received).
+
+Payload (estructura):
+- ecommerce:
+  - currency (string)
+  - value (number)
+  - items[]:
+    - item_id (string)
+    - item_name (string)
+    - quantity (int)
+    - price (number)
+    - currency (string)
+
+Ejemplo:
+- event: begin_checkout
+
+Notas:
+- Se construye a partir del carrito actual (WC()->cart).
