@@ -3,12 +3,53 @@
 Principio: WordPress NO inyecta scripts de analítica. WordPress solo empuja dataLayer.
 GTM será el único responsable de tags y píxeles.
 
-## Eventos base
-- event: bressol_page_view
-  - page_type: home|shop|product|cart|checkout|other
-  - language: determine_locale()
-  - currency: WooCommerce currency
-
 ## Convención
 - Todos los eventos se empujan como: { event: "nombre_evento", ...payload }
 - Cuando sea posible, usaremos window.bressolDataLayerPush("event", payload)
+
+## Eventos base
+### bressol_page_view
+Se envía en todas las páginas.
+
+Payload:
+- page_type: home|shop|product|cart|checkout|other
+- language: determine_locale()
+- currency: WooCommerce currency (si WooCommerce existe)
+
+Ejemplo:
+- event: bressol_page_view
+
+## Eventos eCommerce (WooCommerce)
+### view_item
+Se envía en páginas de producto (product page).
+
+Payload (estructura):
+- ecommerce.items[]:
+  - item_id (string)
+  - item_name (string)
+  - price (number)
+  - currency (string)
+
+Ejemplo:
+- event: view_item
+
+Notas:
+- price usa wc_get_price_to_display() (precio mostrado al usuario).
+
+### add_to_cart
+Se envía tras añadir un producto al carrito.
+Se guarda en sesión en servidor y se imprime en el siguiente render (wp_head).
+
+Payload (estructura):
+- ecommerce.items[]:
+  - item_id (string)
+  - item_name (string)
+  - quantity (int)
+  - price (number)
+  - currency (string)
+
+Ejemplo:
+- event: add_to_cart
+
+Notas:
+- Si el producto es variable, se usa variation_id como referencia principal.
