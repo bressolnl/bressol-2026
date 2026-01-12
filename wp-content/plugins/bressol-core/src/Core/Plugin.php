@@ -29,5 +29,6 @@ final class Plugin
         // Aquí añadimos módulos a medida que el proyecto crece.
         $this->modules[] = new \Bressol\Modules\Tracking\TrackingModule();
         $this->modules[] = new \Bressol\Modules\Packs\PacksModule();
+        $this->modules[] = new \Bressol\Modules\GuidedShopping\GuidedShoppingModule();
     }
 }
