@@ -12,8 +12,11 @@ if (!defined('ABSPATH')) {
 final class GuidedShoppingModule implements ModuleInterface
 {
     public function register(): void
-    {
-        // Frontend shortcode + handler
-        (new \Bressol\Modules\GuidedShopping\Frontend\WizardShortcode())->register();
+{
+    (new \Bressol\Modules\GuidedShopping\Frontend\WizardShortcode())->register();
+
+    if (class_exists('\WooCommerce')) {
+        (new \Bressol\Modules\GuidedShopping\Frontend\AddToCartRedirector())->register();
     }
+}
 }

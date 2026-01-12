@@ -9,25 +9,34 @@ if (!defined('ABSPATH')) {
 
 final class UpsellRecommender
 {
+    // IDs reales (WooCommerce products)
+    private const GIFT_BOX_PRODUCT_ID = 80;
+    private const GIFT_CARD_PRODUCT_ID = 81;
+
     /**
-     * Devuelve una lista de upsells recomendados.
-     * MVP: mezcla packs upgrade + placeholder caja regalo.
-     *
-     * @return array<int, array{type:string,title:string,description:string,cta:string,url:?string}>
+     * @return array<int, array{type:string,product_id:?int,title:string,description:string,cta:string,url:?string}>
      */
     public function recommend(?string $budget, ?string $occasion, array $currentPackIds = []): array
     {
         $upsells = [];
 
-        // 1) Placeholder: caja regalo si es para regalo
+        // 1) Upsells de regalo (reales) si occasion = gift
         if ($occasion === 'gift') {
-            $upsells[] = [
-                'type' => 'placeholder',
-                'title' => 'Añade caja regalo',
-                'description' => 'Presentación premium para regalo (añadiremos el producto real más adelante).',
-                'cta' => 'Quiero caja regalo',
-                'url' => null,
-            ];
+            // Caja regalo
+            $upsells[] = $this->productUpsell(
+                self::GIFT_BOX_PRODUCT_ID,
+                'Añade caja regalo',
+                'Presentación premium para regalo.',
+                'Añadir caja regalo'
+            );
+
+            // Tarjeta
+            $upsells[] = $this->productUpsell(
+                self::GIFT_CARD_PRODUCT_ID,
+                'Añade tarjeta dedicatoria',
+                'Incluye un mensaje personalizado.',
+                'Añadir tarjeta'
+            );
         }
 
         // 2) Upgrade de pack por tier (si existen packs etiquetados)
@@ -42,6 +51,7 @@ final class UpsellRecommender
                 if ($p) {
                     $upsells[] = [
                         'type' => 'pack_upgrade',
+                        'product_id' => $candidate,
                         'title' => 'Mejora recomendada',
                         'description' => 'Opción superior que encaja con tu selección.',
                         'cta' => 'Ver pack premium',
@@ -51,7 +61,28 @@ final class UpsellRecommender
             }
         }
 
-        return $upsells;
+        // filtra nulos (por si algún producto no existe)
+        return array_values(array_filter($upsells));
+    }
+
+    private function productUpsell(int $productId, string $title, string $description, string $cta): ?array
+    {
+        if (!function_exists('wc_get_product')) {
+            return null;
+        }
+        $p = wc_get_product($productId);
+        if (!$p) {
+            return null;
+        }
+
+        return [
+            'type' => 'product',
+            'product_id' => $productId,
+            'title' => $title,
+            'description' => $description,
+            'cta' => $cta,
+            'url' => null,
+        ];
     }
 
     private function findFirstPackByTier(string $tier, ?string $occasion): ?int
@@ -81,7 +112,6 @@ final class UpsellRecommender
 
         $id = (int) $ids[0];
 
-        // Filtro por occasion si existe meta
         $occ = (string) get_post_meta($id, '_bressol_pack_occasion', true);
         if ($occasion === 'gift') {
             if ($occ !== '' && $occ !== 'gift' && $occ !== 'both') return null;
