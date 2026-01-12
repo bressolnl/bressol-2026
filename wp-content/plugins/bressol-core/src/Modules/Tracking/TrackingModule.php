@@ -13,6 +13,11 @@ final class TrackingModule implements ModuleInterface
 {
     public function register(): void
     {
+        // No cargamos tracking en admin.
+        if (is_admin()) {
+            return;
+        }
+
         add_action('wp_enqueue_scripts', [$this, 'enqueueAssets']);
         add_action('wp_head', [$this, 'printBasePageViewEvent'], 1);
         add_action('wp_head', [$this, 'printQueuedWooEvents'], 6);
@@ -20,6 +25,7 @@ final class TrackingModule implements ModuleInterface
         // Registrar eventos WooCommerce (si WooCommerce está activo)
         if (class_exists('\WooCommerce')) {
             (new \Bressol\Modules\Tracking\Woo\WooEvents())->register();
+            (new \Bressol\Modules\Tracking\Woo\CheckoutEvents())->register();
         }
     }
 
@@ -27,7 +33,6 @@ final class TrackingModule implements ModuleInterface
     {
         $handle = 'bressol-core-tracking';
 
-        // En Windows symlink + plugins_url a veces es delicado.
         // Base robusta: usar el archivo principal del plugin por ruta estable.
         $src = plugins_url(
             'src/Modules/Tracking/assets/tracking.js',
