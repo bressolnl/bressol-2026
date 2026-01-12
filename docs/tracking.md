@@ -98,3 +98,43 @@ Ejemplo:
 Notas:
 - Se evita duplicado por sesión usando una key ligada al order_id.
 - Se obtiene order_id desde order-received en la URL.
+
+### view_cart
+Se envía cuando el usuario visita la página de carrito.
+
+Payload (estructura):
+- ecommerce:
+  - currency (string)
+  - value (number)          # total del carrito
+  - items[]:
+    - item_id (string)
+    - item_name (string)
+    - quantity (int)
+    - price (number)
+    - currency (string)
+
+Ejemplo:
+- event: view_cart
+
+Notas:
+- Se construye a partir del carrito actual (WC()->cart).
+
+### remove_from_cart
+Se envía cuando el usuario elimina un producto del carrito.
+
+Payload (estructura):
+- ecommerce:
+  - items[]:
+    - item_id (string, opcional)
+    - item_name (string, opcional)
+    - quantity (int)
+
+Ejemplo:
+- event: remove_from_cart
+
+Notas:
+- En carritos clásicos, el evento puede enviarse tras recarga completa.
+- En WooCommerce Blocks (cart block), el evento se emite en frontend al hacer click
+  sobre el botón de eliminar, sin necesidad de refresh.
+- En WooCommerce Blocks, el payload puede no incluir item_id si no está disponible
+  en el DOM; en ese caso se envía el evento sin items o solo con item_name.
