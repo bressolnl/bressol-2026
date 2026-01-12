@@ -73,3 +73,28 @@ Ejemplo:
 
 Notas:
 - Se construye a partir del carrito actual (WC()->cart).
+
+### purchase
+Se envía en la página de “Gracias” (order received) tras completar una compra.
+
+Payload (estructura):
+- ecommerce:
+  - transaction_id (string)
+  - currency (string)
+  - value (number)        # total del pedido
+  - tax (number)
+  - shipping (number)
+  - coupon (string|null)  # códigos separados por coma si hay varios
+  - items[]:
+    - item_id (string)
+    - item_name (string)
+    - quantity (int)
+    - price (number)      # total por unidad (según Woo)
+    - currency (string)
+
+Ejemplo:
+- event: purchase
+
+Notas:
+- Se evita duplicado por sesión usando una key ligada al order_id.
+- Se obtiene order_id desde order-received en la URL.

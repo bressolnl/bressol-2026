@@ -26,6 +26,7 @@ final class TrackingModule implements ModuleInterface
         if (class_exists('\WooCommerce')) {
             (new \Bressol\Modules\Tracking\Woo\WooEvents())->register();
             (new \Bressol\Modules\Tracking\Woo\CheckoutEvents())->register();
+            (new \Bressol\Modules\Tracking\Woo\PurchaseEvents())->register();
         }
     }
 
