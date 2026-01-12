@@ -44,32 +44,69 @@ final class PackForm
             $label = (string) ($slot['label'] ?? $key);
             $required = !empty($slot['required']);
 
+            $min = (int) ($slot['min'] ?? 0);
+            $max = (int) ($slot['max'] ?? 1);
+
             echo '<div style="margin:10px 0;">';
             echo '<label style="display:block;font-weight:600;margin-bottom:6px;">'
                 . esc_html($label)
                 . ($required ? ' <span style="color:#b00;">*</span>' : '')
                 . '</label>';
 
-            // MVP: max=1 => select. Más adelante: checkbox multiselección.
-            echo '<select name="bressol_pack[' . esc_attr($key) . ']">';
-            echo '<option value="">-- Selecciona --</option>';
+            // Caso 1: selección única (max <= 1) -> select como antes
+            if ($max <= 1) {
+                echo '<select name="bressol_pack[' . esc_attr($key) . ']">';
+                echo '<option value="">-- Selecciona --</option>';
+
+                foreach (($slot['options'] ?? []) as $opt) {
+                    $pid = (int) ($opt['product_id'] ?? 0);
+                    if ($pid <= 0) {
+                        continue;
+                    }
+
+                    $optLabel = (string) ($opt['label'] ?? ('Product ' . $pid));
+                    $surcharge = (float) ($opt['surcharge'] ?? 0);
+
+                    $value = $pid . '|' . $surcharge;
+
+                    $suffix = $surcharge > 0 ? (' (+' . $surcharge . '€)') : '';
+                    echo '<option value="' . esc_attr($value) . '">'
+                        . esc_html($optLabel . $suffix)
+                        . '</option>';
+                }
+
+                echo '</select>';
+                echo '</div>';
+                continue;
+            }
+
+            // Caso 2: selección múltiple con cantidades (max > 1)
+            echo '<div style="display:grid;gap:8px;">';
 
             foreach (($slot['options'] ?? []) as $opt) {
                 $pid = (int) ($opt['product_id'] ?? 0);
-                if ($pid <= 0) continue;
+                if ($pid <= 0) {
+                    continue;
+                }
 
                 $optLabel = (string) ($opt['label'] ?? ('Product ' . $pid));
                 $surcharge = (float) ($opt['surcharge'] ?? 0);
 
-                $value = $pid . '|' . $surcharge;
+                $suffix = $surcharge > 0 ? (' (+' . $surcharge . '€ / unidad)') : '';
 
-                $suffix = $surcharge > 0 ? (' (+' . $surcharge . '€)') : '';
-                echo '<option value="' . esc_attr($value) . '">'
-                    . esc_html($optLabel . $suffix)
-                    . '</option>';
+                echo '<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid #eee;padding:8px;">';
+                echo '<div>' . esc_html($optLabel . $suffix) . '</div>';
+
+                // Importante: nombre como array por product_id para permitir repetir (qty)
+                echo '<input type="number" min="0" max="' . esc_attr((string) $max) . '" value="0" '
+                    . 'name="bressol_pack[' . esc_attr($key) . '][' . esc_attr((string) $pid) . ']" '
+                    . 'style="width:80px;" />';
+
+                echo '</div>';
             }
 
-            echo '</select>';
+            echo '</div>';
+            echo '<small>Selecciona entre ' . esc_html((string) $min) . ' y ' . esc_html((string) $max) . ' unidades en total.</small>';
             echo '</div>';
         }
 

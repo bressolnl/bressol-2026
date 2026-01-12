@@ -32,13 +32,52 @@ final class PackCart
 
         foreach ($slots as $slot) {
             $key = (string) ($slot['key'] ?? '');
-            if ($key === '') continue;
+            if ($key === '') {
+                continue;
+            }
 
             $required = !empty($slot['required']);
-            $value = isset($input[$key]) ? (string) $input[$key] : '';
+            $min = (int) ($slot['min'] ?? 0);
+            $max = (int) ($slot['max'] ?? 1);
 
-            if ($required && $value === '') {
-                wc_add_notice('Falta seleccionar: ' . ($slot['label'] ?? $key), 'error');
+            // Caso 1: slot simple (max <= 1) -> viene como string "productId|surcharge"
+            if ($max <= 1) {
+                $value = isset($input[$key]) ? (string) $input[$key] : '';
+                if ($required && $value === '') {
+                    wc_add_notice('Falta seleccionar: ' . ($slot['label'] ?? $key), 'error');
+                    return false;
+                }
+                continue;
+            }
+
+            // Caso 2: slot múltiple (max > 1) -> viene como array [productId => qty]
+            $slotValues = $input[$key] ?? [];
+            if (!is_array($slotValues)) {
+                $slotValues = [];
+            }
+
+            $totalQty = 0;
+            foreach ($slotValues as $pid => $qtyVal) {
+                $q = (int) $qtyVal;
+                if ($q < 0) {
+                    $q = 0;
+                }
+                $totalQty += $q;
+            }
+
+            if ($required && $totalQty < $min) {
+                wc_add_notice(
+                    'Debes seleccionar al menos ' . $min . ' en: ' . ($slot['label'] ?? $key),
+                    'error'
+                );
+                return false;
+            }
+
+            if ($totalQty > $max) {
+                wc_add_notice(
+                    'Has seleccionado más de ' . $max . ' en: ' . ($slot['label'] ?? $key),
+                    'error'
+                );
                 return false;
             }
         }
@@ -61,31 +100,77 @@ final class PackCart
         $selections = [];
         $surchargeTotal = 0.0;
 
-        foreach ($input as $slotKey => $raw) {
-            $raw = (string) $raw;
-            if ($raw === '') continue;
+        // Para poder mapear product_id -> surcharge configurado, leemos options del JSON
+        $surchargeMapBySlot = $this->buildSurchargeMap($def);
 
-            // value = "productId|surcharge"
-            [$pidStr, $sStr] = array_pad(explode('|', $raw), 2, '0');
-            $pid = (int) $pidStr;
-            $surcharge = (float) $sStr;
+        foreach ($def['slots'] ?? [] as $slot) {
+            $slotKey = (string) ($slot['key'] ?? '');
+            if ($slotKey === '') {
+                continue;
+            }
 
-            if ($pid <= 0) continue;
+            $max = (int) ($slot['max'] ?? 1);
 
-            $selections[(string) $slotKey] = [
-                'product_id' => $pid,
-                'surcharge'  => $surcharge,
-            ];
+            // Slot simple
+            if ($max <= 1) {
+                $raw = isset($input[$slotKey]) ? (string) $input[$slotKey] : '';
+                if ($raw === '') {
+                    continue;
+                }
 
-            $surchargeTotal += $surcharge;
+                // value = "productId|surcharge"
+                [$pidStr, $sStr] = array_pad(explode('|', $raw), 2, '0');
+                $pid = (int) $pidStr;
+                $surcharge = (float) $sStr;
+
+                if ($pid <= 0) {
+                    continue;
+                }
+
+                $selections[$slotKey] = [
+                    [
+                        'product_id' => $pid,
+                        'qty'        => 1,
+                        'surcharge'  => $surcharge,
+                    ],
+                ];
+
+                $surchargeTotal += $surcharge;
+                continue;
+            }
+
+            // Slot múltiple: array de cantidades por producto
+            $slotValues = $input[$slotKey] ?? [];
+            if (!is_array($slotValues)) {
+                $slotValues = [];
+            }
+
+            foreach ($slotValues as $pidStr => $qtyVal) {
+                $pid = (int) $pidStr;
+                $q = (int) $qtyVal;
+
+                if ($pid <= 0 || $q <= 0) {
+                    continue;
+                }
+
+                $surcharge = (float) ($surchargeMapBySlot[$slotKey][$pid] ?? 0.0);
+
+                $selections[$slotKey][] = [
+                    'product_id' => $pid,
+                    'qty'        => $q,
+                    'surcharge'  => $surcharge,
+                ];
+
+                $surchargeTotal += ($q * $surcharge);
+            }
         }
 
         $cartItemData['bressol_pack'] = [
-            'selections' => $selections,
+            'selections'      => $selections,
             'surcharge_total' => $surchargeTotal,
         ];
 
-        // Para que Woo distinga dos packs con selecciones distintas (evita que se agrupen)
+        // Evita que Woo agrupe packs con selecciones distintas
         $cartItemData['bressol_pack_hash'] = md5(wp_json_encode($cartItemData['bressol_pack']));
 
         return $cartItemData;
@@ -107,28 +192,39 @@ final class PackCart
 
             $surcharge = (float) ($cartItem['bressol_pack']['surcharge_total'] ?? 0);
 
-            // Ajustar precio final del pack
             $product->set_price($base + $surcharge);
         }
     }
 
     public function displayPackSelectionInCart(array $itemData, array $cartItem): array
     {
-        if (empty($cartItem['bressol_pack']['selections'])) {
+        $selections = $cartItem['bressol_pack']['selections'] ?? null;
+        if (!is_array($selections) || empty($selections)) {
             return $itemData;
         }
 
-        foreach ($cartItem['bressol_pack']['selections'] as $slotKey => $sel) {
-            $pid = (int) ($sel['product_id'] ?? 0);
-            if ($pid <= 0) continue;
+        foreach ($selections as $slotKey => $lines) {
+            if (!is_array($lines)) {
+                continue;
+            }
 
-            $p = wc_get_product($pid);
-            $name = $p ? $p->get_name() : ('Product ' . $pid);
+            // $lines es array de líneas con product_id, qty, surcharge
+            foreach ($lines as $line) {
+                $pid = (int) ($line['product_id'] ?? 0);
+                $qty = (int) ($line['qty'] ?? 0);
 
-            $itemData[] = [
-                'key'   => 'Pack: ' . $slotKey,
-                'value' => $name,
-            ];
+                if ($pid <= 0 || $qty <= 0) {
+                    continue;
+                }
+
+                $p = wc_get_product($pid);
+                $name = $p ? $p->get_name() : ('Product ' . $pid);
+
+                $itemData[] = [
+                    'key'   => 'Pack: ' . $slotKey,
+                    'value' => $name . ' ×' . $qty,
+                ];
+            }
         }
 
         return $itemData;
@@ -143,10 +239,35 @@ final class PackCart
         $item->add_meta_data('_bressol_pack', $values['bressol_pack']);
     }
 
+    private function buildSurchargeMap(array $def): array
+    {
+        $map = [];
+
+        foreach (($def['slots'] ?? []) as $slot) {
+            $slotKey = (string) ($slot['key'] ?? '');
+            if ($slotKey === '') {
+                continue;
+            }
+
+            foreach (($slot['options'] ?? []) as $opt) {
+                $pid = (int) ($opt['product_id'] ?? 0);
+                if ($pid <= 0) {
+                    continue;
+                }
+
+                $map[$slotKey][$pid] = (float) ($opt['surcharge'] ?? 0.0);
+            }
+        }
+
+        return $map;
+    }
+
     private function getPackDefinition(int $productId): ?array
     {
         $raw = (string) get_post_meta($productId, self::META_KEY, true);
-        if ($raw === '') return null;
+        if ($raw === '') {
+            return null;
+        }
 
         $decoded = json_decode($raw, true);
         return is_array($decoded) ? $decoded : null;
