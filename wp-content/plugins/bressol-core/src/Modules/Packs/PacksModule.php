@@ -16,6 +16,7 @@ final class PacksModule implements ModuleInterface
         // Admin: metabox para definir packs (JSON)
         if (is_admin()) {
             (new \Bressol\Modules\Packs\Admin\PackMetaBox())->register();
+            (new \Bressol\Modules\Packs\Admin\PackAttributesMetaBox())->register();
         }
 
         // Frontend: UI del pack en ficha de producto

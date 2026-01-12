@@ -5,6 +5,7 @@ namespace Bressol\Modules\GuidedShopping\Frontend;
 
 use Bressol\Modules\GuidedShopping\Wizard\WizardSession;
 use Bressol\Modules\GuidedShopping\Wizard\PackRecommender;
+use Bressol\Modules\GuidedShopping\Wizard\UpsellRecommender;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -36,20 +37,23 @@ final class WizardShortcode
             if ($action === 'save') {
                 $occasion = isset($_POST['occasion']) ? sanitize_text_field((string) $_POST['occasion']) : '';
                 $budget   = isset($_POST['budget']) ? sanitize_text_field((string) $_POST['budget']) : '';
-                $recommender = new PackRecommender();
-                $recommendations = $recommender->recommend($budget);
 
-                if ($occasion !== '') {
-                    $session->set('occasion', $occasion);
-                }
-                if ($budget !== '') {
-                    $session->set('budget', $budget);
-                }
+                $session->set('occasion', $occasion);
+                $session->set('budget', $budget);
             }
         }
 
+        // Estado actual desde sesión (siempre)
         $occasion = $session->get('occasion', '');
         $budget   = $session->get('budget', '');
+
+        // Recomendaciones (siempre calculadas con el estado actual)
+        $recommender = new PackRecommender();
+        $recommendations = $recommender->recommend($budget ?: null, $occasion ?: null);
+
+        // Upsells (MVP)
+        $upsellRecommender = new UpsellRecommender();
+        $upsells = $upsellRecommender->recommend($budget ?: null, $occasion ?: null, $recommendations);
 
         ob_start();
         ?>
@@ -104,10 +108,10 @@ final class WizardShortcode
                 <?php if (!$budget): ?>
                     <p style="color:#666;margin:0;">Elige un presupuesto para ver recomendaciones.</p>
                 <?php elseif (!$recommendations): ?>
-                    <p style="color:#666;margin:0;">No hay packs que encajen con este presupuesto (todavía).</p>
+                    <p style="color:#666;margin:0;">No hay packs que encajen con esta selección (todavía).</p>
                 <?php else: ?>
                     <ul style="margin:0 0 0 18px;">
-                        <?php foreach ($recommendations as $pid): 
+                        <?php foreach ($recommendations as $pid):
                             $p = wc_get_product($pid);
                             if (!$p) continue;
                             ?>
@@ -121,6 +125,29 @@ final class WizardShortcode
                     </ul>
                 <?php endif; ?>
             </div>
+
+            <div style="margin-top:14px;">
+                <h4 style="margin:0 0 8px 0;">Mejoras recomendadas</h4>
+
+                <?php if (empty($upsells)): ?>
+                    <p style="color:#666;margin:0;">No hay mejoras recomendadas para esta selección.</p>
+                <?php else: ?>
+                    <ul style="margin:0 0 0 18px;">
+                        <?php foreach ($upsells as $u): ?>
+                            <li style="margin:8px 0;">
+                                <strong><?php echo esc_html($u['title']); ?></strong><br/>
+                                <span style="color:#666;"><?php echo esc_html($u['description']); ?></span><br/>
+                                <?php if (!empty($u['url'])): ?>
+                                    <a href="<?php echo esc_url($u['url']); ?>"><?php echo esc_html($u['cta']); ?></a>
+                                <?php else: ?>
+                                    <span style="color:#999;"><?php echo esc_html($u['cta']); ?> (placeholder)</span>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
+
         </div>
         <?php
         return (string) ob_get_clean();
