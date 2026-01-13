@@ -9,19 +9,9 @@ if (!defined('ABSPATH')) {
 
 final class ProductPageRecommendations
 {
-    // Config MVP por IDs (tu catálogo mínimo)
-    private const PACK_COCINA_ID = 88;
-    private const VINEGAR_ID = 83;
-    private const SALT_ID = 84;
-    private const OLIVES_ID = 85;
-    private const TAPENADE_ID = 86;
-
     public function register(): void
     {
         add_action('woocommerce_after_single_product_summary', [$this, 'render'], 12);
-    
-        add_action('wp_ajax_bressol_reco_click', [$this, 'ajaxRecoClick']);
-        add_action('wp_ajax_nopriv_bressol_reco_click', [$this, 'ajaxRecoClick']);
     }
 
     public function render(): void
@@ -38,7 +28,8 @@ final class ProductPageRecommendations
         $sourceProductId = (int) $product->get_id();
         $family = $this->detectFamilyByCategory($sourceProductId);
 
-        $items = $this->getRecommendationsForFamily($family);
+        $items = $this->getRecommendationsForFamily($family, $sourceProductId);
+        echo '<!-- BRESSOL RECO DEBUG: product=' . (int)$sourceProductId . ' family=' . esc_html($family) . ' -->';
         if (empty($items)) {
             return;
         }
@@ -65,17 +56,19 @@ final class ProductPageRecommendations
             <ul style="margin:0 0 0 18px;">
                 <?php foreach ($valid as $rec): ?>
                     <?php /** @var \WC_Product $p */ $p = $rec['product']; ?>
+
+                    <?php
+                    $targetUrl = add_query_arg([
+                        'bressol_reco_src'  => (string) $sourceProductId,
+                        'bressol_reco_type' => (string) $rec['type'],
+                    ], get_permalink($rec['product_id']));
+                    ?>
+
                     <li style="margin:10px 0;">
                         <a class="bressol-reco-link"
                            data-reco-type="<?php echo esc_attr($rec['type']); ?>"
                            data-reco-product-id="<?php echo esc_attr((string)$rec['product_id']); ?>"
-                           <?php
-$targetUrl = add_query_arg([
-    'bressol_reco_src'  => (string) $sourceProductId,
-    'bressol_reco_type' => (string) $rec['type'],
-], get_permalink($rec['product_id']));
-?>
-href="<?php echo esc_url($targetUrl); ?>">
+                           href="<?php echo esc_url($targetUrl); ?>">
                             <?php echo esc_html($p->get_name()); ?>
                         </a>
                         — <strong><?php echo wp_kses_post(wc_price((float) $p->get_price())); ?></strong><br/>
@@ -95,93 +88,65 @@ href="<?php echo esc_url($targetUrl); ?>">
               family: '<?php echo esc_js($family); ?>',
               recommended_product_ids: <?php echo wp_json_encode($recommendedIds); ?>
             });
-
-            document.addEventListener('click', function(e){
-  const a = e.target.closest('a.bressol-reco-link');
-  if (!a) return;
-
-  e.preventDefault();
-
-  const payload = new URLSearchParams();
-  payload.append('action', 'bressol_reco_click');
-  payload.append('source_product_id', '<?php echo esc_js((string)$sourceProductId); ?>');
-  payload.append('recommended_product_id', a.dataset.recoProductId || '');
-  payload.append('reco_type', a.dataset.recoType || '');
-
-  fetch('<?php echo esc_js(admin_url('admin-ajax.php')); ?>', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-    body: payload.toString()
-  }).catch(function(){ /* ignore */ })
-    .finally(function(){
-      window.location.href = a.href;
-    });
-}, {capture:true});
           })();
         </script>
         <?php
     }
 
-    public function ajaxRecoClick(): void
-{
-    if (!function_exists('WC') || !WC()->session) {
-        wp_send_json_error(['message' => 'No session'], 400);
-    }
-
-    $source = isset($_POST['source_product_id']) ? (int) $_POST['source_product_id'] : 0;
-    $target = isset($_POST['recommended_product_id']) ? (int) $_POST['recommended_product_id'] : 0;
-    $type   = isset($_POST['reco_type']) ? sanitize_text_field((string) $_POST['reco_type']) : '';
-
-    if ($source <= 0 || $target <= 0) {
-        wp_send_json_error(['message' => 'Invalid payload'], 400);
-    }
-
-    WC()->session->set('bressol_datalayer_reco_click', [
-        'context' => 'pdp',
-        'source_product_id' => (string) $source,
-        'recommended_product_id' => (string) $target,
-        'reco_type' => $type ?: null,
-    ]);
-
-    wp_send_json_success(['ok' => true]);
-}
-
-    private function getRecommendationsForFamily(string $family): array
+    private function getRecommendationsForFamily(string $family, int $sourceProductId): array
     {
-        // MVP basado en el catálogo mínimo actual
         if ($family === 'oil') {
-            return [
-                [
-                    'product_id' => self::PACK_COCINA_ID,
-                    'type' => 'upsell_pack',
-                    'reason' => 'Pack recomendado para cocina: combina aceite con complementos.',
-                ],
-                [
-                    'product_id' => self::SALT_ID,
-                    'type' => 'cross_sell',
-                    'reason' => 'Complemento ideal para el aceite.',
-                ],
-                [
-                    'product_id' => self::VINEGAR_ID,
-                    'type' => 'cross_sell',
-                    'reason' => 'Completa tu set con vinagre artesano.',
-                ],
-            ];
+            $recs = [];
+
+            $packId = $this->findPackByFocus('oil');
+            if ($packId && $packId !== $sourceProductId) {
+                $recs[] = [
+                    'product_id' => $packId,
+                    'type'       => 'upsell_pack',
+                    'reason'     => 'Pack recomendado para cocina: combina aceite con complementos.',
+                ];
+            }
+
+            foreach ($this->findProductsByCategorySlug('salt', 2) as $pid) {
+                $recs[] = [
+                    'product_id' => $pid,
+                    'type'       => 'cross_sell',
+                    'reason'     => 'Complemento ideal para el aceite.',
+                ];
+            }
+
+            foreach ($this->findProductsByCategorySlug('vinegar', 2) as $pid) {
+                $recs[] = [
+                    'product_id' => $pid,
+                    'type'       => 'cross_sell',
+                    'reason'     => 'Completa tu set con vinagre artesano.',
+                ];
+            }
+
+            return $recs;
         }
 
         if ($family === 'drinks') {
-            return [
-                [
-                    'product_id' => self::OLIVES_ID,
-                    'type' => 'cross_sell',
-                    'reason' => 'Perfecto para acompañar bebidas (borrel).',
-                ],
-                [
-                    'product_id' => self::TAPENADE_ID,
-                    'type' => 'cross_sell',
-                    'reason' => 'Añade un aperitivo gourmet para tu borrel.',
-                ],
-            ];
+            $recs = [];
+
+            $packId = $this->findPackByTheme('borrel');
+            if ($packId) {
+                $recs[] = [
+                    'product_id' => $packId,
+                    'type'       => 'upsell_pack',
+                    'reason'     => 'Perfecto para acompañar bebidas: pack Borrel.',
+                ];
+            }
+
+            foreach ($this->findProductsByCategorySlugs(['olives', 'tapenade'], 4) as $pid) {
+                $recs[] = [
+                    'product_id' => $pid,
+                    'type'       => 'cross_sell',
+                    'reason'     => 'Ideal para aperitivo (borrel).',
+                ];
+            }
+
+            return $recs;
         }
 
         return [];
@@ -194,13 +159,130 @@ href="<?php echo esc_url($targetUrl); ?>">
             return 'other';
         }
 
-        $slugs = array_map(fn($t) => strtolower((string)$t->slug), $terms);
+        $slugs = array_map(fn($t) => strtolower((string) $t->slug), $terms);
 
         if (in_array('oil', $slugs, true)) return 'oil';
         if (in_array('drinks', $slugs, true)) return 'drinks';
         if (in_array('tapenade', $slugs, true) || in_array('olives', $slugs, true)) return 'borrel';
         if (in_array('salt', $slugs, true) || in_array('vinegar', $slugs, true)) return 'oil';
 
+        // Fallback: si es un pack (o producto) con focus definido, deducimos familia sin categorías
+$focus = (string) get_post_meta($productId, '_bressol_pack_focus', true);
+if ($focus !== '') {
+    $arr = array_filter(array_map('trim', explode(',', strtolower($focus))));
+    if (in_array('oil', $arr, true)) return 'oil';
+    if (in_array('drinks', $arr, true) || in_array('borrel', $arr, true)) return 'drinks';
+    if (in_array('sweet', $arr, true)) return 'sweet';
+}
+
         return 'other';
+    }
+
+    private function findPackByFocus(string $needle): ?int
+    {
+        $args = [
+            'post_type'      => 'product',
+            'post_status'    => 'publish',
+            'posts_per_page' => 12,
+            'fields'         => 'ids',
+            'meta_query'     => [
+                [
+                    'key'     => '_bressol_pack_definition',
+                    'compare' => 'EXISTS',
+                ],
+                [
+                    'key'     => '_bressol_pack_focus',
+                    'compare' => 'EXISTS',
+                ],
+            ],
+        ];
+
+        $ids = get_posts($args);
+        if (!is_array($ids)) return null;
+
+        foreach ($ids as $id) {
+            $id = (int) $id;
+            $focus = (string) get_post_meta($id, '_bressol_pack_focus', true);
+            $arr = array_filter(array_map('trim', explode(',', strtolower($focus))));
+            if (in_array(strtolower($needle), $arr, true)) {
+                return $id;
+            }
+        }
+
+        return null;
+    }
+
+    private function findPackByTheme(string $needle): ?int
+    {
+        $args = [
+            'post_type'      => 'product',
+            'post_status'    => 'publish',
+            'posts_per_page' => 12,
+            'fields'         => 'ids',
+            'meta_query'     => [
+                [
+                    'key'     => '_bressol_pack_definition',
+                    'compare' => 'EXISTS',
+                ],
+                [
+                    'key'     => '_bressol_pack_themes',
+                    'compare' => 'EXISTS',
+                ],
+            ],
+        ];
+
+        $ids = get_posts($args);
+        if (!is_array($ids)) return null;
+
+        foreach ($ids as $id) {
+            $id = (int) $id;
+            $themes = (string) get_post_meta($id, '_bressol_pack_themes', true);
+            $arr = array_filter(array_map('trim', explode(',', strtolower($themes))));
+            if (in_array(strtolower($needle), $arr, true)) {
+                return $id;
+            }
+        }
+
+        return null;
+    }
+
+    private function findProductsByCategorySlug(string $slug, int $limit): array
+    {
+        $args = [
+            'post_type'      => 'product',
+            'post_status'    => 'publish',
+            'posts_per_page' => $limit,
+            'fields'         => 'ids',
+            'tax_query'      => [
+                [
+                    'taxonomy' => 'product_cat',
+                    'field'    => 'slug',
+                    'terms'    => [$slug],
+                ],
+            ],
+        ];
+
+        $ids = get_posts($args);
+        return is_array($ids) ? array_map('intval', $ids) : [];
+    }
+
+    private function findProductsByCategorySlugs(array $slugs, int $limit): array
+    {
+        $args = [
+            'post_type'      => 'product',
+            'post_status'    => 'publish',
+            'posts_per_page' => $limit,
+            'fields'         => 'ids',
+            'tax_query'      => [
+                [
+                    'taxonomy' => 'product_cat',
+                    'field'    => 'slug',
+                    'terms'    => $slugs,
+                ],
+            ],
+        ];
+
+        $ids = get_posts($args);
+        return is_array($ids) ? array_map('intval', $ids) : [];
     }
 }
