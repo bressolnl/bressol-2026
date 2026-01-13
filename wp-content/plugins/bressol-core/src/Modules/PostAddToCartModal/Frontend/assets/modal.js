@@ -2,15 +2,35 @@
     if (!window.bressolModal) return;
   
     const COOLDOWN_MS = (window.bressolModal.cooldownMinutes || 30) * 60 * 1000;
-    const COOLDOWN_KEY = 'bressol_modal_cooldown_until';
+    const COOLDOWN_KEY_BASE = 'bressol_modal_cooldown_until';
   
-    function inCooldown(){
-      const until = parseInt(localStorage.getItem(COOLDOWN_KEY) || '0', 10);
+    function debugNoCooldown(){
+      try {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('bressol_modal_debug') === '1';
+      } catch(e){
+        return false;
+      }
+    }
+  
+    function cooldownKey(productId){
+      return COOLDOWN_KEY_BASE + ':' + String(productId || 'global');
+    }
+  
+    function inCooldown(productId){
+      // cooldown desactivado
+      if (Number(window.bressolModal.cooldownMinutes || 30) <= 0) return false;
+  
+      // debug override
+      if (debugNoCooldown()) return false;
+  
+      const until = parseInt(localStorage.getItem(cooldownKey(productId)) || '0', 10);
       return Date.now() < until;
     }
   
-    function setCooldown(){
-      localStorage.setItem(COOLDOWN_KEY, String(Date.now() + COOLDOWN_MS));
+    function setCooldown(productId){
+      if (Number(window.bressolModal.cooldownMinutes || 30) <= 0) return;
+      localStorage.setItem(cooldownKey(productId), String(Date.now() + COOLDOWN_MS));
     }
   
     function closeModal(){
@@ -25,6 +45,40 @@
       } catch(e) {
         return v.toFixed(2) + ' ' + cur;
       }
+    }
+  
+    function escapeHtml(str){
+      return String(str || '').replace(/[&<>"']/g, s => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[s]));
+    }
+  
+    function post(action, payload){
+      const body = new URLSearchParams();
+      body.append('action', action);
+      body.append('nonce', window.bressolModal.nonce);
+      Object.keys(payload || {}).forEach(k => body.append(k, String(payload[k])));
+  
+      return fetch(window.bressolModal.ajaxUrl, {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},
+        body: body.toString()
+      }).then(async (r) => {
+        // Si WP devuelve "0" o HTML, esto evita que reviente silenciosamente
+        const text = await r.text();
+        try { return JSON.parse(text); } catch(e){ return { success:false, raw:text, status:r.status }; }
+      });
+    }
+  
+    function applyFragments(resp){
+      // WC_AJAX fragments devuelve { fragments: {...}, cart_hash: "..." }
+      if (!resp || !resp.fragments) return;
+  
+      Object.keys(resp.fragments).forEach(selector => {
+        $(selector).replaceWith(resp.fragments[selector]);
+      });
+  
+      $(document.body).trigger('wc_fragments_refreshed');
     }
   
     function renderModal(data){
@@ -46,7 +100,8 @@
       $('body').append(html);
   
       $('#bressol-modal-close').on('click', function(){
-        setCooldown();
+        // cooldown por producto origen
+        setCooldown(data && data.source_product_id ? data.source_product_id : null);
         closeModal();
       });
   
@@ -116,7 +171,6 @@
         const pack = (data.upgrade_packs || []).find(p => String(p.pack_id) === packId);
         if (!pack) return;
   
-        // Render config UI (slots)
         renderConfigStep(data, pack);
       });
     }
@@ -201,47 +255,17 @@
       });
     }
   
-    function post(action, payload){
-      const body = new URLSearchParams();
-      body.append('action', action);
-      body.append('nonce', window.bressolModal.nonce);
-      Object.keys(payload || {}).forEach(k => body.append(k, String(payload[k])));
-  
-      return fetch(window.bressolModal.ajaxUrl, {
-        method: 'POST',
-        headers: {'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'},
-        body: body.toString()
-      }).then(r => r.json());
-    }
-  
-    function applyFragments(resp){
-      // WC_AJAX fragments devuelve { fragments: {...}, cart_hash: "..." }
-      if (!resp || !resp.fragments) return;
-  
-      Object.keys(resp.fragments).forEach(selector => {
-        $(selector).replaceWith(resp.fragments[selector]);
-      });
-  
-      $(document.body).trigger('wc_fragments_refreshed');
-    }
-  
-    function escapeHtml(str){
-      return String(str || '').replace(/[&<>"']/g, s => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-      }[s]));
-    }
-  
     // Hook WooCommerce: cuando un add_to_cart AJAX termina
     $(document.body).on('added_to_cart', function(ev, fragments, cart_hash, $button){
       try {
-        if (inCooldown()) return;
-  
         // Evitar en checkout
         if ($('body').hasClass('woocommerce-checkout')) return;
   
         // Obtener product_id del botón
         const pid = $button && $button.data('product_id') ? parseInt($button.data('product_id'), 10) : 0;
         if (!pid) return;
+  
+        if (inCooldown(pid)) return;
   
         post('bressol_get_post_add_to_cart_suggestions', { product_id: pid })
           .then(resp => {
@@ -259,11 +283,11 @@
     // abrimos el modal en el siguiente render usando bressolModal.pending.
     $(function(){
       try {
-        if (inCooldown()) return;
         const pending = window.bressolModal && window.bressolModal.pending ? window.bressolModal.pending : null;
         if (!pending || !pending.product_id) return;
   
-        // Pedimos sugerencias al servidor y abrimos modal si hay
+        if (inCooldown(pending.product_id)) return;
+  
         post('bressol_get_post_add_to_cart_suggestions', { product_id: pending.product_id })
           .then(resp => {
             if (!resp || !resp.success) return;

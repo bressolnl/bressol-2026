@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 final class Plugin
 {
-    /** @var ModuleInterface[] */
+    /** @var array<int, ModuleInterface> */
     private array $modules = [];
 
     public function __construct()
@@ -31,5 +31,6 @@ final class Plugin
         $this->modules[] = new \Bressol\Modules\Packs\PacksModule();
         $this->modules[] = new \Bressol\Modules\GuidedShopping\GuidedShoppingModule();
         $this->modules[] = new \Bressol\Modules\Recommendations\RecommendationsModule();
+        $this->modules[] = new \Bressol\Modules\PostAddToCartModal\PostAddToCartModalModule();
     }
 }
