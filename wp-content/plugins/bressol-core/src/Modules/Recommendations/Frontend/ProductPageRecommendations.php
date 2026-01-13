@@ -27,9 +27,9 @@ final class ProductPageRecommendations
 
         $sourceProductId = (int) $product->get_id();
         $family = $this->detectFamilyByCategory($sourceProductId);
+        $slotKey = $this->detectSlotByCategory($sourceProductId);
 
         $items = $this->getRecommendationsForFamily($family, $sourceProductId);
-        echo '<!-- BRESSOL RECO DEBUG: product=' . (int)$sourceProductId . ' family=' . esc_html($family) . ' -->';
         if (empty($items)) {
             return;
         }
@@ -58,16 +58,31 @@ final class ProductPageRecommendations
                     <?php /** @var \WC_Product $p */ $p = $rec['product']; ?>
 
                     <?php
-                    $targetUrl = add_query_arg([
+                    // Default: link normal (reco)
+                    $targetArgs = [
                         'bressol_reco_src'  => (string) $sourceProductId,
                         'bressol_reco_type' => (string) $rec['type'],
-                    ], get_permalink($rec['product_id']));
+                    ];
+
+                    // Si es pack, lo tratamos como UPGRADE (prefill)
+                    if (($rec['type'] ?? '') === 'upsell_pack' && $slotKey !== 'other') {
+                        $targetArgs['bressol_reco_type'] = 'upgrade_pack';
+
+                        $targetArgs['bressol_upgrade'] = '1';
+                        $targetArgs['bressol_upgrade_src'] = 'pdp';
+                        $targetArgs['bressol_upgrade_source_product_id'] = (string) $sourceProductId;
+
+                        $targetArgs['bressol_prefill_slot'] = $slotKey;                 // oil|salt|vinegar|drinks
+                        $targetArgs['bressol_prefill_product_id'] = (string) $sourceProductId;
+                    }
+
+                    $targetUrl = add_query_arg($targetArgs, get_permalink((int) $rec['product_id']));
                     ?>
 
                     <li style="margin:10px 0;">
                         <a class="bressol-reco-link"
-                           data-reco-type="<?php echo esc_attr($rec['type']); ?>"
-                           data-reco-product-id="<?php echo esc_attr((string)$rec['product_id']); ?>"
+                           data-reco-type="<?php echo esc_attr((string) $targetArgs['bressol_reco_type']); ?>"
+                           data-reco-product-id="<?php echo esc_attr((string) $rec['product_id']); ?>"
                            href="<?php echo esc_url($targetUrl); ?>">
                             <?php echo esc_html($p->get_name()); ?>
                         </a>
@@ -164,16 +179,37 @@ final class ProductPageRecommendations
         if (in_array('oil', $slugs, true)) return 'oil';
         if (in_array('drinks', $slugs, true)) return 'drinks';
         if (in_array('tapenade', $slugs, true) || in_array('olives', $slugs, true)) return 'borrel';
+
+        // Nota: salt/vinegar los tratamos como "familia oil" para reglas,
+        // pero el slot se detecta aparte (detectSlotByCategory).
         if (in_array('salt', $slugs, true) || in_array('vinegar', $slugs, true)) return 'oil';
 
-        // Fallback: si es un pack (o producto) con focus definido, deducimos familia sin categorías
-$focus = (string) get_post_meta($productId, '_bressol_pack_focus', true);
-if ($focus !== '') {
-    $arr = array_filter(array_map('trim', explode(',', strtolower($focus))));
-    if (in_array('oil', $arr, true)) return 'oil';
-    if (in_array('drinks', $arr, true) || in_array('borrel', $arr, true)) return 'drinks';
-    if (in_array('sweet', $arr, true)) return 'sweet';
-}
+        // Fallback por focus (packs/productos sin categorías)
+        $focus = (string) get_post_meta($productId, '_bressol_pack_focus', true);
+        if ($focus !== '') {
+            $arr = array_filter(array_map('trim', explode(',', strtolower($focus))));
+            if (in_array('oil', $arr, true)) return 'oil';
+            if (in_array('drinks', $arr, true) || in_array('borrel', $arr, true)) return 'drinks';
+            if (in_array('sweet', $arr, true)) return 'sweet';
+        }
+
+        return 'other';
+    }
+
+    // NUEVO: detecta qué slot hay que prefijar (oil/salt/vinegar/drinks)
+    private function detectSlotByCategory(int $productId): string
+    {
+        $terms = get_the_terms($productId, 'product_cat');
+        if (!is_array($terms)) {
+            return 'other';
+        }
+
+        $slugs = array_map(fn($t) => strtolower((string) $t->slug), $terms);
+
+        if (in_array('oil', $slugs, true)) return 'oil';
+        if (in_array('salt', $slugs, true)) return 'salt';
+        if (in_array('vinegar', $slugs, true)) return 'vinegar';
+        if (in_array('drinks', $slugs, true)) return 'drinks';
 
         return 'other';
     }
@@ -186,14 +222,8 @@ if ($focus !== '') {
             'posts_per_page' => 12,
             'fields'         => 'ids',
             'meta_query'     => [
-                [
-                    'key'     => '_bressol_pack_definition',
-                    'compare' => 'EXISTS',
-                ],
-                [
-                    'key'     => '_bressol_pack_focus',
-                    'compare' => 'EXISTS',
-                ],
+                ['key' => '_bressol_pack_definition', 'compare' => 'EXISTS'],
+                ['key' => '_bressol_pack_focus', 'compare' => 'EXISTS'],
             ],
         ];
 
@@ -220,14 +250,8 @@ if ($focus !== '') {
             'posts_per_page' => 12,
             'fields'         => 'ids',
             'meta_query'     => [
-                [
-                    'key'     => '_bressol_pack_definition',
-                    'compare' => 'EXISTS',
-                ],
-                [
-                    'key'     => '_bressol_pack_themes',
-                    'compare' => 'EXISTS',
-                ],
+                ['key' => '_bressol_pack_definition', 'compare' => 'EXISTS'],
+                ['key' => '_bressol_pack_themes', 'compare' => 'EXISTS'],
             ],
         ];
 
@@ -254,11 +278,7 @@ if ($focus !== '') {
             'posts_per_page' => $limit,
             'fields'         => 'ids',
             'tax_query'      => [
-                [
-                    'taxonomy' => 'product_cat',
-                    'field'    => 'slug',
-                    'terms'    => [$slug],
-                ],
+                ['taxonomy' => 'product_cat', 'field' => 'slug', 'terms' => [$slug]],
             ],
         ];
 
@@ -274,11 +294,7 @@ if ($focus !== '') {
             'posts_per_page' => $limit,
             'fields'         => 'ids',
             'tax_query'      => [
-                [
-                    'taxonomy' => 'product_cat',
-                    'field'    => 'slug',
-                    'terms'    => $slugs,
-                ],
+                ['taxonomy' => 'product_cat', 'field' => 'slug', 'terms' => $slugs],
             ],
         ];
 
