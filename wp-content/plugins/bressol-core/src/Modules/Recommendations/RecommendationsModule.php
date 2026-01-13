@@ -29,5 +29,7 @@ final class RecommendationsModule implements ModuleInterface
 
         (new \Bressol\Modules\Recommendations\Frontend\RecoClickCapture())->register();
         (new \Bressol\Modules\Recommendations\Frontend\ProductPageRecommendations())->register();
+        (new \Bressol\Modules\Recommendations\Frontend\CartRecommendations())->register();
+        (new \Bressol\Modules\Recommendations\Frontend\CartRecoClickCapture())->register();
     }
 }

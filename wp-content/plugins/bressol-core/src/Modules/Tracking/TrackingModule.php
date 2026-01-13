@@ -89,6 +89,17 @@ final class TrackingModule implements ModuleInterface
             echo "</script>\n";
         }
 
+        // 2b) cart reco click (cola)
+        $cartRecoClick = WC()->session->get('bressol_datalayer_cart_reco_click');
+        if ($cartRecoClick) {
+            WC()->session->__unset('bressol_datalayer_cart_reco_click');
+
+            echo "\n<script>";
+            echo "window.dataLayer = window.dataLayer || [];";
+            echo "window.dataLayer.push(Object.assign({event:'bressol_cart_reco_click'}, " . wp_json_encode($cartRecoClick) . "));";
+            echo "</script>\n";
+        }
+
         // 3) add_to_cart (cola)
         $addPayload = WC()->session->get('bressol_datalayer_add_to_cart');
         if ($addPayload) {
