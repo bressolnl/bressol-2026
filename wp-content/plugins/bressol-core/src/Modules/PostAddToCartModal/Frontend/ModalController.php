@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Bressol\Modules\PostAddToCartModal\Frontend;
 
+use Bressol\Modules\Recommendations\Domain\RecommendationRules;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -11,21 +13,15 @@ final class ModalController
 {
     public function register(): void
     {
-        // Guardar último add_to_cart (para poder reemplazar)
         add_action('woocommerce_add_to_cart', [$this, 'captureLastAdded'], 10, 6);
-
-        // Assets (solo frontend)
         add_action('wp_enqueue_scripts', [$this, 'enqueueAssets']);
 
-        // AJAX: suggestions
         add_action('wp_ajax_bressol_get_post_add_to_cart_suggestions', [$this, 'ajaxSuggestions']);
         add_action('wp_ajax_nopriv_bressol_get_post_add_to_cart_suggestions', [$this, 'ajaxSuggestions']);
 
-        // AJAX: upgrade replace
         add_action('wp_ajax_bressol_upgrade_replace_with_pack', [$this, 'ajaxReplaceWithPack']);
         add_action('wp_ajax_nopriv_bressol_upgrade_replace_with_pack', [$this, 'ajaxReplaceWithPack']);
 
-        // AJAX: add extra
         add_action('wp_ajax_bressol_modal_add_extra_to_cart', [$this, 'ajaxAddExtra']);
         add_action('wp_ajax_nopriv_bressol_modal_add_extra_to_cart', [$this, 'ajaxAddExtra']);
     }
@@ -42,32 +38,23 @@ final class ModalController
             return;
         }
 
-        $slot = $this->detectSlotByCategory($productId);
+        $slot = RecommendationRules::detectSlot($productId);
 
         $payload = [
             'cart_item_key' => $cartItemKey,
             'product_id'    => (int) $productId,
-            'slot'          => $slot, // oil|salt|vinegar|drinks|olives|tapenade|other
+            'slot'          => $slot,
             'ts'            => time(),
         ];
 
-        // Último add_to_cart (para AJAX y para validar)
         WC()->session->set('bressol_last_added', $payload);
-
-        // Cola pending (fallback para PDP submit / Blocks: el modal se abrirá en el siguiente render)
         WC()->session->set('bressol_modal_pending', $payload);
     }
 
     public function enqueueAssets(): void
     {
-        if (is_admin()) {
-            return;
-        }
-
-        // Evitar modal en checkout
-        if (function_exists('is_checkout') && is_checkout()) {
-            return;
-        }
+        if (is_admin()) return;
+        if (function_exists('is_checkout') && is_checkout()) return;
 
         $handle = 'bressol-post-add-to-cart-modal';
         $src = plugins_url(
@@ -75,10 +62,8 @@ final class ModalController
             WP_PLUGIN_DIR . '/bressol-core/bressol-core.php'
         );
 
-        // Sube versión para bust cache cuando cambies JS
         wp_enqueue_script($handle, $src, ['jquery'], '0.1.1', true);
 
-        // Leer cola "pending" y limpiarla para que no se repita
         $pending = null;
         if (function_exists('WC') && WC()->session) {
             $p = WC()->session->get('bressol_modal_pending');
@@ -89,25 +74,20 @@ final class ModalController
         }
 
         wp_localize_script($handle, 'bressolModal', [
-            'ajaxUrl'          => admin_url('admin-ajax.php'),
-            'nonce'            => wp_create_nonce('bressol_modal'),
-            'cooldownMinutes'  => 30,
-            'pending'          => $pending,
+            'ajaxUrl'         => admin_url('admin-ajax.php'),
+            'nonce'           => wp_create_nonce('bressol_modal'),
+            'cooldownMinutes' => 30,
+            'pending'         => $pending,
         ]);
     }
 
     private function ensureWooSession(): bool
     {
-        if (!function_exists('WC')) {
-            return false;
-        }
+        if (!function_exists('WC')) return false;
 
-        // En admin-ajax a veces WC()->session no está inicializada
         if (!WC()->session && method_exists(WC(), 'initialize_session')) {
             WC()->initialize_session();
         }
-
-        // En algunas instalaciones, para tocar el carrito en AJAX es útil inicializarlo
         if (!WC()->cart && method_exists(WC(), 'initialize_cart')) {
             WC()->initialize_cart();
         }
@@ -132,21 +112,16 @@ final class ModalController
 
         $last = WC()->session->get('bressol_last_added');
         if (!is_array($last) || (int) ($last['product_id'] ?? 0) !== $sourceProductId) {
-            // Si no coincide, seguimos igualmente pero sin cart_item_key
             $last = [
                 'cart_item_key' => '',
                 'product_id'    => $sourceProductId,
-                'slot'          => $this->detectSlotByCategory($sourceProductId),
+                'slot'          => RecommendationRules::detectSlot($sourceProductId),
             ];
         }
 
-        // 1) Packs compatibles (upgrade)
-        $packs = $this->findCompatiblePacks($sourceProductId);
+        $packs  = $this->findCompatiblePacks($sourceProductId);
+        $extras = $this->findExtras($sourceProductId, 3); // <-- ahora aplica la regla central (borrel_food => beer+aperitief)
 
-        // 2) Extras (cross-sell)
-        $extras = $this->findExtras($sourceProductId, 3);
-
-        // Prioridad: packs primero, y limitar total 3
         $suggestions = [
             'source_product_id' => (string) $sourceProductId,
             'cart_item_key'     => (string) ($last['cart_item_key'] ?? ''),
@@ -157,18 +132,14 @@ final class ModalController
 
         foreach ($packs as $p) {
             $suggestions['upgrade_packs'][] = $p;
-            if (count($suggestions['upgrade_packs']) >= 3) {
-                break;
-            }
+            if (count($suggestions['upgrade_packs']) >= 3) break;
         }
 
         $remaining = 3 - count($suggestions['upgrade_packs']);
         if ($remaining > 0) {
             foreach ($extras as $e) {
                 $suggestions['extras'][] = $e;
-                if (count($suggestions['extras']) >= $remaining) {
-                    break;
-                }
+                if (count($suggestions['extras']) >= $remaining) break;
             }
         }
 
@@ -199,32 +170,24 @@ final class ModalController
             wp_send_json_error(['message' => 'Invalid payload'], 400);
         }
 
-        // Leer config enviada (slot => product_id). Si no viene, defaults.
         $config = [];
         if (isset($_POST['config_json'])) {
             $decoded = json_decode((string) $_POST['config_json'], true);
             if (is_array($decoded)) {
-                foreach ($decoded as $k => $v) {
-                    $config[(string) $k] = (int) $v;
-                }
+                foreach ($decoded as $k => $v) $config[(string) $k] = (int) $v;
             }
         }
 
         if (empty($config)) {
             $config = $this->buildDefaultPackConfig($packId, $slotKey, $sourcePid);
         } else {
-            // Asegurar prefill del slot del producto origen
-            if ($slotKey !== 'other') {
-                $config[$slotKey] = $sourcePid;
-            }
+            if ($slotKey !== 'other') $config[$slotKey] = $sourcePid;
         }
 
-        // 1) Remove item original (si existe)
         if ($cartItemKey !== '' && isset(WC()->cart->get_cart()[$cartItemKey])) {
             WC()->cart->remove_cart_item($cartItemKey);
         }
 
-        // 2) Add pack con meta de config
         $cartItemData = [
             'bressol_pack_config' => $config,
             'bressol_upgrade'     => [
@@ -238,7 +201,6 @@ final class ModalController
             wp_send_json_error(['message' => 'Failed to add pack'], 500);
         }
 
-        // Devuelve fragments JSON y termina
         \WC_AJAX::get_refreshed_fragments();
         wp_die();
     }
@@ -267,28 +229,9 @@ final class ModalController
         wp_die();
     }
 
-    private function detectSlotByCategory(int $productId): string
-    {
-        $terms = get_the_terms($productId, 'product_cat');
-        if (!is_array($terms)) {
-            return 'other';
-        }
-
-        $slugs = array_map(fn($t) => strtolower((string) $t->slug), $terms);
-
-        if (in_array('oil', $slugs, true)) return 'oil';
-        if (in_array('salt', $slugs, true)) return 'salt';
-        if (in_array('vinegar', $slugs, true)) return 'vinegar';
-        if (in_array('drinks', $slugs, true)) return 'drinks';
-        if (in_array('olives', $slugs, true)) return 'olives';
-        if (in_array('tapenade', $slugs, true)) return 'tapenade';
-
-        return 'other';
-    }
-
     /**
      * Packs compatibles = packs cuyo JSON contiene un slot con options que incluye sourcePid.
-     * Devuelve packs con: pack_id, title, price, currency, reason, prefill_slot, slots (para UI del modal)
+     * Devuelve packs con: pack_id, title, price, currency, reason, prefill_slot, slots
      */
     private function findCompatiblePacks(int $sourcePid): array
     {
@@ -303,23 +246,17 @@ final class ModalController
         ];
 
         $ids = get_posts($args);
-        if (!is_array($ids) || !$ids) {
-            return [];
-        }
+        if (!is_array($ids) || !$ids) return [];
 
         $out = [];
         foreach ($ids as $id) {
             $packId = (int) $id;
 
             $json = (string) get_post_meta($packId, '_bressol_pack_definition', true);
-            if ($json === '') {
-                continue;
-            }
+            if ($json === '') continue;
 
             $def = json_decode($json, true);
-            if (!is_array($def) || empty($def['slots']) || !is_array($def['slots'])) {
-                continue;
-            }
+            if (!is_array($def) || empty($def['slots']) || !is_array($def['slots'])) continue;
 
             $prefillSlot = '';
             foreach ($def['slots'] as $slot) {
@@ -333,15 +270,10 @@ final class ModalController
                     }
                 }
             }
-
-            if ($prefillSlot === '') {
-                continue;
-            }
+            if ($prefillSlot === '') continue;
 
             $p = wc_get_product($packId);
-            if (!$p) {
-                continue;
-            }
+            if (!$p) continue;
 
             $out[] = [
                 'pack_id'      => (string) $packId,
@@ -354,18 +286,13 @@ final class ModalController
             ];
         }
 
-        // Ordenar por precio ascendente
-        usort($out, function (array $a, array $b): int {
-            return ((float) ($a['price'] ?? 0)) <=> ((float) ($b['price'] ?? 0));
-        });
-
+        usort($out, fn($a, $b) => ((float) ($a['price'] ?? 0)) <=> ((float) ($b['price'] ?? 0)));
         return $out;
     }
 
     private function normalizeSlotsForUi(array $slots): array
     {
         $out = [];
-
         foreach ($slots as $slot) {
             if (!is_array($slot)) continue;
 
@@ -407,9 +334,7 @@ final class ModalController
         $def = json_decode($json, true);
 
         $config = [];
-        if (!is_array($def) || empty($def['slots']) || !is_array($def['slots'])) {
-            return $config;
-        }
+        if (!is_array($def) || empty($def['slots']) || !is_array($def['slots'])) return $config;
 
         foreach ($def['slots'] as $slot) {
             if (!is_array($slot)) continue;
@@ -421,7 +346,6 @@ final class ModalController
             $selected = (int) ($options[0]['product_id'] ?? 0);
 
             if ($key === $slotKey) {
-                // usar source si está permitido
                 foreach ($options as $opt) {
                     if ((int) ($opt['product_id'] ?? 0) === $sourcePid) {
                         $selected = $sourcePid;
@@ -430,33 +354,20 @@ final class ModalController
                 }
             }
 
-            if ($selected > 0) {
-                $config[$key] = $selected;
-            }
+            if ($selected > 0) $config[$key] = $selected;
         }
 
         return $config;
     }
 
+    /**
+     * Extras del modal: usa RecommendationRules::extraTargetCategorySlugs()
+     * para que borrel_food => SOLO beer/aperitief.
+     */
     private function findExtras(int $sourcePid, int $limit): array
     {
-        $terms = get_the_terms($sourcePid, 'product_cat');
-        $slugs = is_array($terms) ? array_map(fn($t) => strtolower((string) $t->slug), $terms) : [];
-
-        $targetSlugs = [];
-        if (in_array('olives', $slugs, true) || in_array('tapenade', $slugs, true)) {
-            $targetSlugs = ['drinks'];
-        } elseif (in_array('drinks', $slugs, true)) {
-            $targetSlugs = ['olives', 'tapenade'];
-        } elseif (in_array('oil', $slugs, true)) {
-            $targetSlugs = ['salt', 'vinegar'];
-        } elseif (in_array('salt', $slugs, true) || in_array('vinegar', $slugs, true)) {
-            $targetSlugs = ['oil'];
-        }
-
-        if (!$targetSlugs) {
-            return [];
-        }
+        $targetSlugs = RecommendationRules::extraTargetCategorySlugs($sourcePid);
+        if (!$targetSlugs) return [];
 
         $args = [
             'post_type'      => 'product',
@@ -469,9 +380,7 @@ final class ModalController
         ];
 
         $ids = get_posts($args);
-        if (!is_array($ids)) {
-            return [];
-        }
+        if (!is_array($ids)) return [];
 
         $out = [];
         foreach ($ids as $id) {
