@@ -36,6 +36,11 @@ spl_autoload_register(static function (string $class): void {
     }
 });
 
+register_activation_hook(__FILE__, static function (): void {
+    \Bressol\Modules\Esp\Installer::install();
+});
+
+
 add_action('plugins_loaded', static function (): void {
     // Arranque central del plugin.
     $plugin = new \Bressol\Core\Plugin();
