@@ -120,7 +120,10 @@ final class ModalController
         }
 
         $packs  = $this->findCompatiblePacks($sourceProductId);
-        $extras = $this->findExtras($sourceProductId, 3); // <-- ahora aplica la regla central (borrel_food => beer+aperitief)
+        $extras = RecommendationRules::buildRecommendations('modal_extras', [
+            'source_product_id' => $sourceProductId,
+            'limit'             => 3,
+        ]);
 
         $suggestions = [
             'source_product_id' => (string) $sourceProductId,
@@ -358,47 +361,5 @@ final class ModalController
         }
 
         return $config;
-    }
-
-    /**
-     * Extras del modal: usa RecommendationRules::extraTargetCategorySlugs()
-     * para que borrel_food => SOLO beer/aperitief.
-     */
-    private function findExtras(int $sourcePid, int $limit): array
-    {
-        $targetSlugs = RecommendationRules::extraTargetCategorySlugs($sourcePid);
-        if (!$targetSlugs) return [];
-
-        $args = [
-            'post_type'      => 'product',
-            'post_status'    => 'publish',
-            'posts_per_page' => $limit,
-            'fields'         => 'ids',
-            'tax_query'      => [
-                ['taxonomy' => 'product_cat', 'field' => 'slug', 'terms' => $targetSlugs],
-            ],
-        ];
-
-        $ids = get_posts($args);
-        if (!is_array($ids)) return [];
-
-        $out = [];
-        foreach ($ids as $id) {
-            $pid = (int) $id;
-            if ($pid === $sourcePid) continue;
-
-            $p = wc_get_product($pid);
-            if (!$p) continue;
-
-            $out[] = [
-                'product_id' => (string) $pid,
-                'title'      => $p->get_name(),
-                'price'      => (float) $p->get_price(),
-                'currency'   => function_exists('get_woocommerce_currency') ? get_woocommerce_currency() : 'EUR',
-                'reason'     => 'Ideal para acompañar tu elección.',
-            ];
-        }
-
-        return $out;
     }
 }
