@@ -119,12 +119,6 @@ final class ModalController
             ];
         }
 
-        $packs  = $this->findCompatiblePacks($sourceProductId);
-        $extras = RecommendationRules::buildRecommendations('modal_extras', [
-            'source_product_id' => $sourceProductId,
-            'limit'             => 3,
-        ]);
-
         $suggestions = [
             'source_product_id' => (string) $sourceProductId,
             'cart_item_key'     => (string) ($last['cart_item_key'] ?? ''),
@@ -133,16 +127,71 @@ final class ModalController
             'extras'            => [],
         ];
 
-        foreach ($packs as $p) {
-            $suggestions['upgrade_packs'][] = $p;
-            if (count($suggestions['upgrade_packs']) >= 3) break;
+        $sourceProduct = wc_get_product($sourceProductId);
+        $sourcePrice = $sourceProduct ? (float) $sourceProduct->get_price() : 0.0;
+
+        // =========================================================
+        // CASO A) El producto fuente ES un PACK: upgrades low->mid->high
+        // =========================================================
+        if ($this->isPackProduct($sourceProductId)) {
+            $sourceTier = $this->getPackTier($sourceProductId);
+            $nextTier = $this->nextTier($sourceTier);
+
+            if ($nextTier !== null) {
+                // Tema borrel (tu caso). Si en el futuro quieres generalizar:
+                // podrías leer themes del source pack y escoger el principal.
+                $nextPackId = $this->findPackByThemeAndTier('borrel', $nextTier);
+
+                if ($nextPackId) {
+                    $packCard = $this->buildPackCard(
+                        $nextPackId,
+                        $sourcePrice,
+                        '', // prefill_slot no aplica para pack->pack
+                        ($nextTier === 'mid')
+                            ? 'Hazlo PRO: añade bebidas a tu borrel.'
+                            : 'Hazlo PREMIUM: añade jamón y queso.'
+                    );
+
+                    if (!empty($packCard)) {
+                        $suggestions['upgrade_packs'][] = $packCard;
+                    }
+                }
+            }
+
+            // Para upgrades de pack->pack: por defecto NO mostramos extras (mejor UX).
+            // Si quieres mostrarlos, puedes volver a activarlos aquí.
+            $hasAny = !empty($suggestions['upgrade_packs']);
+
+            wp_send_json_success([
+                'has_suggestions' => $hasAny,
+                'data'            => $suggestions,
+            ]);
         }
 
-        $remaining = 3 - count($suggestions['upgrade_packs']);
-        if ($remaining > 0) {
-            foreach ($extras as $e) {
-                $suggestions['extras'][] = $e;
-                if (count($suggestions['extras']) >= $remaining) break;
+        // =========================================================
+        // CASO B) Producto fuente NO es pack: sugerir SOLO pack basic (tier low) + extras
+        // =========================================================
+
+        // Packs compatibles PERO solo tier=low (basic) y compatibles con el producto fuente
+        $packs = $this->findCompatiblePacksLowTier($sourceProductId, $sourcePrice);
+
+        // Extras centralizados
+        $extras = RecommendationRules::buildRecommendations('modal_extras', [
+            'source_product_id' => $sourceProductId,
+            'limit'             => 6,
+        ]);
+
+        // 1) SOLO 1 pack (basic)
+        if (!empty($packs)) {
+            $suggestions['upgrade_packs'][] = $packs[0];
+        }
+
+        // 2) Extras: 4 items
+        $maxExtras = 4;
+        foreach ($extras as $e) {
+            $suggestions['extras'][] = $e;
+            if (count($suggestions['extras']) >= $maxExtras) {
+                break;
             }
         }
 
@@ -173,24 +222,31 @@ final class ModalController
             wp_send_json_error(['message' => 'Invalid payload'], 400);
         }
 
+        // Parse config_json (slot => pid)
         $config = [];
         if (isset($_POST['config_json'])) {
             $decoded = json_decode((string) $_POST['config_json'], true);
             if (is_array($decoded)) {
-                foreach ($decoded as $k => $v) $config[(string) $k] = (int) $v;
+                foreach ($decoded as $k => $v) {
+                    $config[(string) $k] = (int) $v;
+                }
             }
         }
 
         if (empty($config)) {
             $config = $this->buildDefaultPackConfig($packId, $slotKey, $sourcePid);
         } else {
-            if ($slotKey !== 'other') $config[$slotKey] = $sourcePid;
+            if ($slotKey !== 'other') {
+                $config[$slotKey] = $sourcePid;
+            }
         }
 
+        // Eliminar item original si existe
         if ($cartItemKey !== '' && isset(WC()->cart->get_cart()[$cartItemKey])) {
             WC()->cart->remove_cart_item($cartItemKey);
         }
 
+        // Añadir pack (PackCart convertirá bressol_pack_config -> bressol_pack en capturePackSelection)
         $cartItemData = [
             'bressol_pack_config' => $config,
             'bressol_upgrade'     => [
@@ -232,19 +288,20 @@ final class ModalController
         wp_die();
     }
 
-    /**
-     * Packs compatibles = packs cuyo JSON contiene un slot con options que incluye sourcePid.
-     * Devuelve packs con: pack_id, title, price, currency, reason, prefill_slot, slots
-     */
-    private function findCompatiblePacks(int $sourcePid): array
+    // ---------------------------------------------------------------------
+    // Packs compatibles para el modal (producto normal -> pack basic)
+    // ---------------------------------------------------------------------
+
+    private function findCompatiblePacksLowTier(int $sourcePid, float $sourcePrice): array
     {
         $args = [
             'post_type'      => 'product',
             'post_status'    => 'publish',
-            'posts_per_page' => 20,
+            'posts_per_page' => 50,
             'fields'         => 'ids',
             'meta_query'     => [
                 ['key' => '_bressol_pack_definition', 'compare' => 'EXISTS'],
+                ['key' => '_bressol_pack_tier', 'value' => 'low', 'compare' => '='],
             ],
         ];
 
@@ -261,10 +318,13 @@ final class ModalController
             $def = json_decode($json, true);
             if (!is_array($def) || empty($def['slots']) || !is_array($def['slots'])) continue;
 
+            // ¿Incluye el producto fuente en algún slot?
             $prefillSlot = '';
             foreach ($def['slots'] as $slot) {
                 if (!is_array($slot)) continue;
                 $key = (string) ($slot['key'] ?? '');
+                if ($key === '') continue;
+
                 $options = (array) ($slot['options'] ?? []);
                 foreach ($options as $opt) {
                     if ((int) ($opt['product_id'] ?? 0) === $sourcePid) {
@@ -275,22 +335,118 @@ final class ModalController
             }
             if ($prefillSlot === '') continue;
 
-            $p = wc_get_product($packId);
-            if (!$p) continue;
+            $card = $this->buildPackCard(
+                $packId,
+                $sourcePrice,
+                $prefillSlot,
+                'Mejora tu compra con el pack borrel (basic).'
+            );
 
-            $out[] = [
-                'pack_id'      => (string) $packId,
-                'title'        => $p->get_name(),
-                'price'        => (float) $p->get_price(),
-                'currency'     => function_exists('get_woocommerce_currency') ? get_woocommerce_currency() : 'EUR',
-                'reason'       => 'Mejora tu compra con un pack (upgrade).',
-                'prefill_slot' => $prefillSlot,
-                'slots'        => $this->normalizeSlotsForUi($def['slots']),
-            ];
+            if (!empty($card)) {
+                $out[] = $card;
+            }
         }
 
         usort($out, fn($a, $b) => ((float) ($a['price'] ?? 0)) <=> ((float) ($b['price'] ?? 0)));
+
         return $out;
+    }
+
+    // ---------------------------------------------------------------------
+    // Packs upgrades por tier (pack -> pack)
+    // ---------------------------------------------------------------------
+
+    private function isPackProduct(int $productId): bool
+    {
+        $json = (string) get_post_meta($productId, '_bressol_pack_definition', true);
+        return $json !== '';
+    }
+
+    private function getPackTier(int $packId): string
+    {
+        $tier = strtolower((string) get_post_meta($packId, '_bressol_pack_tier', true));
+        if (!in_array($tier, ['low', 'mid', 'high'], true)) {
+            // fallback seguro
+            return 'low';
+        }
+        return $tier;
+    }
+
+    private function nextTier(string $tier): ?string
+    {
+        if ($tier === 'low') return 'mid';
+        if ($tier === 'mid') return 'high';
+        return null;
+    }
+
+    private function findPackByThemeAndTier(string $theme, string $tier): ?int
+    {
+        $theme = strtolower($theme);
+        $tier = strtolower($tier);
+
+        $args = [
+            'post_type'      => 'product',
+            'post_status'    => 'publish',
+            'posts_per_page' => 10,
+            'fields'         => 'ids',
+            'meta_query'     => [
+                ['key' => '_bressol_pack_definition', 'compare' => 'EXISTS'],
+                ['key' => '_bressol_pack_tier', 'value' => $tier, 'compare' => '='],
+                // CSV: borrel,dessert,...
+                ['key' => '_bressol_pack_themes', 'value' => $theme, 'compare' => 'LIKE'],
+            ],
+        ];
+
+        $ids = get_posts($args);
+        if (!is_array($ids) || empty($ids)) return null;
+
+        // Si hay varios, elegimos el más barato
+        $bestId = null;
+        $bestPrice = null;
+
+        foreach ($ids as $id) {
+            $pid = (int) $id;
+            $p = wc_get_product($pid);
+            if (!$p) continue;
+
+            $price = (float) $p->get_price();
+            if ($bestPrice === null || $price < $bestPrice) {
+                $bestPrice = $price;
+                $bestId = $pid;
+            }
+        }
+
+        return $bestId;
+    }
+
+    private function buildPackCard(int $packId, float $sourcePrice, string $prefillSlot, string $reason): array
+    {
+        $p = wc_get_product($packId);
+        if (!$p) return [];
+
+        $price = (float) $p->get_price();
+        $currency = function_exists('get_woocommerce_currency') ? get_woocommerce_currency() : 'EUR';
+
+        $json = (string) get_post_meta($packId, '_bressol_pack_definition', true);
+        $def = json_decode($json, true);
+        if (!is_array($def) || empty($def['slots']) || !is_array($def['slots'])) {
+            return [];
+        }
+
+        $delta = max(0.0, $price - $sourcePrice);
+
+        return [
+            'pack_id'      => (string) $packId,
+            'title'        => $p->get_name(),
+            'price'        => $price,
+            'delta'        => $delta, // para mostrar "+X" en el botón
+            'currency'     => $currency,
+            'reason'       => $reason,
+            'prefill_slot' => $prefillSlot,
+            'tier'         => strtolower((string) get_post_meta($packId, '_bressol_pack_tier', true)),
+            'url'          => get_permalink($packId),
+            'slots'        => $this->normalizeSlotsForUi($def['slots']),
+        ];
     }
 
     private function normalizeSlotsForUi(array $slots): array
@@ -333,8 +489,8 @@ final class ModalController
 
     private function buildDefaultPackConfig(int $packId, string $slotKey, int $sourcePid): array
     {
-        $json = (string) get_post_meta($packId, '_bressol_pack_definition', true);
-        $def = json_decode($json, true);
+        $raw = (string) get_post_meta($packId, '_bressol_pack_definition', true);
+        $def = json_decode($raw, true);
 
         $config = [];
         if (!is_array($def) || empty($def['slots']) || !is_array($def['slots'])) return $config;

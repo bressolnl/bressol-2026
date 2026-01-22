@@ -39,7 +39,9 @@ final class CartRecommendations
             unset($familiesInCart['other']);
         }
 
-        $recommendations = RecommendationRules::buildCartRecommendations(array_keys($familiesInCart));
+        $recommendations = RecommendationRules::buildRecommendations('cart', [
+            'families' => array_keys($familiesInCart),
+        ]);
         if (empty($recommendations)) return;
 
         // Deduplicar por product_id manteniendo el primer motivo

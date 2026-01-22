@@ -40,7 +40,7 @@ final class PackCart
             $min = (int) ($slot['min'] ?? 0);
             $max = (int) ($slot['max'] ?? 1);
 
-            // Caso 1: slot simple (max <= 1) -> viene como string "productId|surcharge"
+            // Slot simple (max <= 1)
             if ($max <= 1) {
                 $value = isset($input[$key]) ? (string) $input[$key] : '';
                 if ($required && $value === '') {
@@ -50,7 +50,7 @@ final class PackCart
                 continue;
             }
 
-            // Caso 2: slot múltiple (max > 1) -> viene como array [productId => qty]
+            // Slot múltiple (max > 1) -> array [productId => qty]
             $slotValues = $input[$key] ?? [];
             if (!is_array($slotValues)) {
                 $slotValues = [];
@@ -59,9 +59,7 @@ final class PackCart
             $totalQty = 0;
             foreach ($slotValues as $pid => $qtyVal) {
                 $q = (int) $qtyVal;
-                if ($q < 0) {
-                    $q = 0;
-                }
+                if ($q < 0) $q = 0;
                 $totalQty += $q;
             }
 
@@ -92,15 +90,25 @@ final class PackCart
             return $cartItemData;
         }
 
-        $input = $_POST['bressol_pack'] ?? [];
-        if (!is_array($input)) {
+        // 1) Intentar input desde PDP
+        $input = $_POST['bressol_pack'] ?? null;
+
+        // 2) Fallback: viene desde modal (slot => pid) o (slot => [pid=>qty])
+        if (!is_array($input) || empty($input)) {
+            $cfg = $cartItemData['bressol_pack_config'] ?? null;
+            if (is_array($cfg) && !empty($cfg)) {
+                $input = $cfg;
+            }
+        }
+
+        if (!is_array($input) || empty($input)) {
             return $cartItemData;
         }
 
         $selections = [];
         $surchargeTotal = 0.0;
 
-        // Para poder mapear product_id -> surcharge configurado, leemos options del JSON
+        // Map product_id -> surcharge por slot
         $surchargeMapBySlot = $this->buildSurchargeMap($def);
 
         foreach ($def['slots'] ?? [] as $slot) {
@@ -113,15 +121,24 @@ final class PackCart
 
             // Slot simple
             if ($max <= 1) {
-                $raw = isset($input[$slotKey]) ? (string) $input[$slotKey] : '';
-                if ($raw === '') {
+                $rawVal = $input[$slotKey] ?? '';
+                if ($rawVal === '' || $rawVal === null) {
                     continue;
                 }
 
-                // value = "productId|surcharge"
-                [$pidStr, $sStr] = array_pad(explode('|', $raw), 2, '0');
-                $pid = (int) $pidStr;
-                $surcharge = (float) $sStr;
+                $pid = 0;
+                $surcharge = 0.0;
+
+                // Caso A: PDP -> "pid|surcharge"
+                if (is_string($rawVal) && strpos($rawVal, '|') !== false) {
+                    [$pidStr, $sStr] = array_pad(explode('|', $rawVal), 2, '0');
+                    $pid = (int) $pidStr;
+                    $surcharge = (float) $sStr;
+                } else {
+                    // Caso B: modal -> pid (int/string num)
+                    $pid = (int) $rawVal;
+                    $surcharge = (float) ($surchargeMapBySlot[$slotKey][$pid] ?? 0.0);
+                }
 
                 if ($pid <= 0) {
                     continue;
@@ -139,7 +156,7 @@ final class PackCart
                 continue;
             }
 
-            // Slot múltiple: array de cantidades por producto
+            // Slot múltiple: array pid=>qty
             $slotValues = $input[$slotKey] ?? [];
             if (!is_array($slotValues)) {
                 $slotValues = [];
@@ -208,7 +225,6 @@ final class PackCart
                 continue;
             }
 
-            // $lines es array de líneas con product_id, qty, surcharge
             foreach ($lines as $line) {
                 $pid = (int) ($line['product_id'] ?? 0);
                 $qty = (int) ($line['qty'] ?? 0);

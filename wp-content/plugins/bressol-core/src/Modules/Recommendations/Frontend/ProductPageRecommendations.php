@@ -28,7 +28,9 @@ final class ProductPageRecommendations
         $family  = RecommendationRules::detectFamily($sourceProductId);
         $slotKey = RecommendationRules::detectSlot($sourceProductId);
 
-        $items = RecommendationRules::buildPdpRecommendations($sourceProductId);
+       $items = RecommendationRules::buildRecommendations('pdp', [
+            'source_product_id' => $sourceProductId,
+        ]);
         if (empty($items)) return;
 
         $valid = [];

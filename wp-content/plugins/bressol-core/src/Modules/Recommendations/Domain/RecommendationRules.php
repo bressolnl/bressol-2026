@@ -271,6 +271,79 @@ final class RecommendationRules
         return [];
     }
 
+        /**
+     * API estable única para consumidores (PDP / Cart / Modal extras).
+     * - pdp: devuelve items con product_id/type/reason
+     * - cart: devuelve items con product_id/type/reason
+     * - modal_extras: devuelve items con product_id/title/price/currency/reason
+     */
+    public static function buildRecommendations(string $context, array $payload): array
+    {
+        if ($context === 'pdp') {
+            return self::buildPdpRecommendations((int) ($payload['source_product_id'] ?? 0));
+        }
+
+        if ($context === 'cart') {
+            $families = $payload['families'] ?? [];
+            if (!is_array($families)) {
+                $families = [];
+            }
+            return self::buildCartRecommendations($families);
+        }
+
+        if ($context === 'modal_extras') {
+            $sourceProductId = (int) ($payload['source_product_id'] ?? 0);
+            $limit = (int) ($payload['limit'] ?? 3);
+            return self::buildModalExtras($sourceProductId, $limit);
+        }
+
+        return [];
+    }
+
+    /**
+     * Builder para extras del modal (cross-sell rápido).
+     * Usa extraTargetCategorySlugs() como origen de reglas para que:
+     * - borrel_food => SOLO beer/aperitief
+     * - drinks => borrel_food
+     * - oil => salt/vinegar (o oil si viene de salt/vinegar)
+     */
+    public static function buildModalExtras(int $sourceProductId, int $limit): array
+    {
+        if ($sourceProductId <= 0 || $limit <= 0) {
+            return [];
+        }
+
+        $targetSlugs = self::extraTargetCategorySlugs($sourceProductId);
+        if (!$targetSlugs) {
+            return [];
+        }
+
+        $ids = self::findProductsByCategorySlugs($targetSlugs, $limit);
+
+        $out = [];
+        foreach ($ids as $pid) {
+            if ($pid === $sourceProductId) {
+                continue;
+            }
+
+            $p = wc_get_product($pid);
+            if (!$p) {
+                continue;
+            }
+
+            $out[] = [
+                'product_id' => (string) $pid,
+                'title'      => $p->get_name(),
+                'price'      => (float) $p->get_price(),
+                'currency'   => function_exists('get_woocommerce_currency') ? get_woocommerce_currency() : 'EUR',
+                'reason'     => 'Ideal para acompañar tu elección.',
+            ];
+        }
+
+        return $out;
+    }
+
+
     // --- Internal helpers (query) ---
     private static function findPackByFocus(string $needle): ?int
     {
