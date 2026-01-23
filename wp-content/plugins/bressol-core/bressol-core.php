@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 /**
  * Plugin Name: Bressol Core
  * Plugin URI: https://bressol.nl
