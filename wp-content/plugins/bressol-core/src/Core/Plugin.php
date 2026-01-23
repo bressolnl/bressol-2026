@@ -33,8 +33,6 @@ final class Plugin
         $this->modules[] = new \Bressol\Modules\Recommendations\RecommendationsModule();
         $this->modules[] = new \Bressol\Modules\PostAddToCartModal\PostAddToCartModalModule();
         $this->modules[] = new \Bressol\Modules\Taxonomies\TaxonomiesModule();
-
-        // CRM (interno)
         $this->modules[] = new \Bressol\Modules\Crm\CrmModule();
     }
 }
