@@ -13,6 +13,7 @@ use Bressol\Modules\Crm\Services\Settings;
 use Bressol\Modules\Crm\Services\TimelineService;
 use Bressol\Modules\Esp\Services\EspConsentService;
 use Bressol\Modules\Crm\Cli\ImportCustomersCommand;
+use Bressol\Modules\Crm\Cli\SelfTestCommand;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -46,14 +47,23 @@ final class CrmModule implements ModuleInterface
             add_action('woocommerce_order_status_completed', [$this, 'handleOrderCompleted'], 10, 1);
             add_action('woocommerce_order_status_processing', [$this, 'handleOrderCompleted'], 10, 1);
             add_action('woocommerce_order_refunded', [$this, 'handleOrderRefunded'], 10, 2);
+            add_filter('woocommerce_checkout_fields', [$this, 'addCheckoutFields']);
+            add_action('woocommerce_checkout_update_order_meta', [$this, 'saveCheckoutOptins'], 10, 1);
         }
 
         if (defined('WP_CLI') && WP_CLI && class_exists('WooCommerce') && class_exists('\\WP_CLI')) {
+            $auditLogger = new AuditLogger();
+            $settings = new Settings();
+            $espService = $this->resolveEspConsentService();
+            $customerService = new CustomerService($auditLogger, $espService);
+            $pointsService = new PointsService($settings, $auditLogger);
             \WP_CLI::add_command('bressol crm import-customers', new ImportCustomersCommand(
-                new ImportCustomersService(
-                    new CustomerService(null, $this->resolveEspConsentService()),
-                    new PointsService(new Settings(), new AuditLogger())
-                )
+                new ImportCustomersService($customerService, $pointsService)
+            ));
+            \WP_CLI::add_command('bressol crm selftest', new SelfTestCommand(
+                $customerService,
+                $pointsService,
+                $espService
             ));
         }
     }
@@ -113,9 +123,59 @@ final class CrmModule implements ModuleInterface
         if (!$customerId) {
             return;
         }
+        
+        $customer = $customerService->get_customer($customerId);
+        if (!$customer || (string) $customer->status === 'deleted') {
+            return;
+        }
 
         $customerService->update_metrics_from_order($customerId, $order);
-        $pointsService->award_points_for_order($customerId, $order, $customerService->get_customer_type($customerId));
+        $customerService->apply_loyalty_opt_in_from_order($customerId, $order);
+        $customerService->apply_marketing_opt_in_from_order($customerId, $order);
+        if ($customerService->is_loyalty_enabled($customerId)) {
+            $pointsService->award_points_for_order($customerId, $order, $customerService->get_customer_type($customerId));
+        }
+    }
+
+    /** @param array<string, mixed> $fields */
+    public function addCheckoutFields(array $fields): array
+    {
+        $fields['billing']['bressol_loyalty_opt_in'] = [
+            'type' => 'checkbox',
+            'label' => 'Quiero unirme al programa de puntos',
+            'required' => false,
+            'class' => ['form-row-wide'],
+            'priority' => 120,
+        ];
+
+        $fields['billing']['bressol_marketing_opt_in'] = [
+            'type' => 'checkbox',
+            'label' => 'Quiero recibir comunicaciones comerciales',
+            'required' => false,
+            'class' => ['form-row-wide'],
+            'priority' => 121,
+        ];
+
+        return $fields;
+    }
+
+    public function saveCheckoutOptins(int $orderId): void
+    {
+        if (!function_exists('wc_get_order')) {
+            return;
+        }
+
+        $order = wc_get_order($orderId);
+        if (!$order) {
+            return;
+        }
+
+        $loyaltyOptIn = isset($_POST['bressol_loyalty_opt_in']) ? (bool) wp_unslash($_POST['bressol_loyalty_opt_in']) : false;
+        $marketingOptIn = isset($_POST['bressol_marketing_opt_in']) ? (bool) wp_unslash($_POST['bressol_marketing_opt_in']) : false;
+
+        $order->update_meta_data('_bressol_loyalty_opt_in', $loyaltyOptIn ? 'yes' : 'no');
+        $order->update_meta_data('_bressol_marketing_opt_in', $marketingOptIn ? 'yes' : 'no');
+        $order->save_meta_data();
     }
 
     public function handleOrderRefunded(int $orderId, int $refundId): void

@@ -315,6 +315,7 @@ final class AdminPages
         echo '</select>';
         echo '<p class="description">Si la base es &quot;Último pedido&quot;, clientes sin pedidos no se anonimizan automáticamente.</p>';
         echo '</td></tr>';
+        echo '<tr><th>Export GDPR</th><td><label><input type="checkbox" name="gdpr_export_enabled" value="1" ' . checked((int) $settings['gdpr_export_enabled'], 1, false) . ' /> Habilitar export GDPR/DSAR</label></td></tr>';
         echo '</table>';
         echo '<p class="submit"><button type="submit" name="bressol_crm_settings_submit" class="button button-primary">Guardar</button></p>';
         echo '</form>';
@@ -340,6 +341,8 @@ final class AdminPages
         $crmMarketing = $consentState['crm_flags']['can_receive_marketing'] ?? false;
         $piiDisabled = (string) $customer->status === 'anonymized';
         $isDeleted = (string) $customer->status === 'deleted';
+        $loyaltyEnabled = (int) ($customer->loyalty_enabled ?? 0) === 1;
+        $loyaltyDisabled = (string) $customer->status !== 'active';
 
         echo '<a href="' . esc_url(admin_url('admin.php?page=bressol-crm')) . '">&larr; Volver al listado</a>';
         echo '<h2>Cliente #' . esc_html((string) $customer->id) . '</h2>';
@@ -417,6 +420,7 @@ final class AdminPages
         echo '<tr><th>Business Type</th><td><input type="text" name="business_type" value="' . esc_attr((string) $customer->business_type) . '" ' . ($editDisabled ? 'disabled' : '') . ' /></td></tr>';
         echo '<tr><th>Perfilado</th><td><label><input type="checkbox" name="can_be_profiled" value="1" ' . checked((int) $customer->can_be_profiled, 1, false) . ' ' . ($editDisabled ? 'disabled' : '') . ' /> Permitido</label></td></tr>';
         echo '<tr><th>Marketing</th><td><label><input type="checkbox" name="can_receive_marketing" value="1" ' . checked((int) $customer->can_receive_marketing, 1, false) . ' ' . ($marketingDisabled || $editDisabled ? 'disabled' : '') . ' /> Permitido</label></td></tr>';
+        echo '<tr><th>Programa de puntos</th><td><label><input type="checkbox" name="loyalty_enabled" value="1" ' . checked($loyaltyEnabled, true, false) . ' ' . ($loyaltyDisabled ? 'disabled' : '') . ' /> En programa de puntos</label></td></tr>';
         echo '</table>';
         echo '<p class="submit"><button type="submit" name="bressol_crm_customer_submit" class="button button-primary" ' . ($editDisabled ? 'disabled' : '') . '>Guardar cambios</button></p>';
         echo '</form>';
@@ -442,12 +446,14 @@ final class AdminPages
         echo '<p class="submit"><button type="submit" name="bressol_crm_customer_anonymize_submit" class="button" ' . ($isDeleted ? 'disabled' : '') . '>Anonimizar</button></p>';
         echo '</form>';
 
-        echo '<h3>Exportar datos</h3>';
-        echo '<form method="post">';
-        wp_nonce_field('bressol_crm_customer_export');
-        echo '<input type="hidden" name="customer_id" value="' . esc_attr((string) $customer->id) . '" />';
-        echo '<p class="submit"><button type="submit" name="bressol_crm_customer_export_submit" class="button">Exportar datos (JSON)</button></p>';
-        echo '</form>';
+        if ($this->settings->is_gdpr_export_enabled()) {
+            echo '<h3>Exportar datos</h3>';
+            echo '<form method="post">';
+            wp_nonce_field('bressol_crm_customer_export');
+            echo '<input type="hidden" name="customer_id" value="' . esc_attr((string) $customer->id) . '" />';
+            echo '<p class="submit"><button type="submit" name="bressol_crm_customer_export_submit" class="button">Exportar datos (GDPR)</button></p>';
+            echo '</form>';
+        }
 
         echo '<h3>Canjear puntos</h3>';
         echo '<form method="post">';
@@ -559,6 +565,26 @@ final class AdminPages
         if (isset($_POST['bressol_crm_customer_export_submit'])) {
             check_admin_referer('bressol_crm_customer_export');
 
+            if (!$this->settings->is_gdpr_export_enabled()) {
+                add_settings_error('bressol_crm', 'gdpr_export_disabled', 'Export GDPR desactivado.', 'error');
+                return;
+            }
+
+            if (!$this->settings->is_gdpr_export_enabled()) {
+                add_settings_error('bressol_crm', 'gdpr_export_disabled', 'Export GDPR desactivado.', 'error');
+                return;
+            }
+
+            if (!$this->settings->is_gdpr_export_enabled()) {
+                add_settings_error('bressol_crm', 'gdpr_export_disabled', 'Export GDPR desactivado.', 'error');
+                return;
+            }
+
+            if (!$this->settings->is_gdpr_export_enabled()) {
+                add_settings_error('bressol_crm', 'gdpr_export_disabled', 'Export GDPR desactivado.', 'error');
+                return;
+            }
+
             $customerId = isset($_POST['customer_id']) ? absint($_POST['customer_id']) : 0;
             if ($customerId <= 0) {
                 add_settings_error('bressol_crm', 'customer_export_invalid', 'Cliente inválido.', 'error');
@@ -592,6 +618,21 @@ final class AdminPages
             $notes = isset($_POST['notes']) ? sanitize_textarea_field(wp_unslash($_POST['notes'])) : null;
 
             if ($customerId > 0 && $pointsUsed > 0) {
+                $customer = $this->customerService->get_customer($customerId);
+                if (!$customer) {
+                    add_settings_error('bressol_crm', 'customer_not_found', 'Cliente no encontrado.', 'error');
+                    return;
+                }
+                if ((string) $customer->status !== 'active') {
+                    add_settings_error('bressol_crm', 'customer_status_locked', 'Cliente no activo. No se pueden registrar canjes.', 'error');
+                    return;
+                }
+
+                if (!$this->customerService->is_loyalty_enabled($customerId)) {
+                    add_settings_error('bressol_crm', 'customer_loyalty_required', 'Cliente fuera del programa de puntos. No se pueden registrar canjes.', 'error');
+                    return;
+                }
+
                 $balance = $this->pointsService->get_balance($customerId);
                 if ($balance < $pointsUsed) {
                     add_settings_error('bressol_crm', 'insufficient_points', 'Saldo insuficiente para canje.', 'error');
@@ -621,6 +662,10 @@ final class AdminPages
             $prevUpdated = isset($_POST['import_updated']) ? max(0, (int) wp_unslash($_POST['import_updated'])) : 0;
             $prevSkipped = isset($_POST['import_skipped']) ? max(0, (int) wp_unslash($_POST['import_skipped'])) : 0;
             $prevErrors = isset($_POST['import_errors']) ? max(0, (int) wp_unslash($_POST['import_errors'])) : 0;
+            $prevPointsAwarded = isset($_POST['import_points_awarded']) ? max(0, (int) wp_unslash($_POST['import_points_awarded'])) : 0;
+            $prevPointsSkipped = isset($_POST['import_points_skipped_no_loyalty']) ? max(0, (int) wp_unslash($_POST['import_points_skipped_no_loyalty'])) : 0;
+            $prevOrdersWithoutEmail = isset($_POST['import_orders_without_email']) ? max(0, (int) wp_unslash($_POST['import_orders_without_email'])) : 0;
+            $prevInvalidOrders = isset($_POST['import_invalid_orders']) ? max(0, (int) wp_unslash($_POST['import_invalid_orders'])) : 0;
 
             $results = $this->importer->run([
                 'status' => $status,
@@ -646,6 +691,10 @@ final class AdminPages
             $updated = $prevUpdated + (int) ($totals['customers_updated'] ?? 0);
             $skipped = $prevSkipped + (int) ($totals['skipped'] ?? 0);
             $errors = $prevErrors + (int) ($totals['errors'] ?? 0);
+            $pointsAwarded = $prevPointsAwarded + (int) ($totals['points_awarded'] ?? 0);
+            $pointsSkipped = $prevPointsSkipped + (int) ($totals['points_skipped_no_loyalty'] ?? 0);
+            $ordersWithoutEmail = $prevOrdersWithoutEmail + (int) ($totals['orders_without_email'] ?? 0);
+            $invalidOrders = $prevInvalidOrders + (int) ($totals['invalid_orders'] ?? 0);
 
             if ($batchCount < $limit) {
                 if ($batchCount === 0) {
@@ -659,6 +708,10 @@ final class AdminPages
                     'import_updated' => $updated,
                     'import_skipped' => $skipped,
                     'import_errors' => $errors,
+                    'import_points_awarded' => $pointsAwarded,
+                    'import_points_skipped_no_loyalty' => $pointsSkipped,
+                    'import_orders_without_email' => $ordersWithoutEmail,
+                    'import_invalid_orders' => $invalidOrders,
                 ];
                 $_GET = array_merge($_GET, $results);
                 return;
@@ -677,6 +730,10 @@ final class AdminPages
                 'import_updated' => $updated,
                 'import_skipped' => $skipped,
                 'import_errors' => $errors,
+                'import_points_awarded' => $pointsAwarded,
+                'import_points_skipped_no_loyalty' => $pointsSkipped,
+                'import_orders_without_email' => $ordersWithoutEmail,
+                'import_invalid_orders' => $invalidOrders,
             ];
 
             wp_safe_redirect(add_query_arg($redirectArgs, admin_url('admin.php')));
@@ -706,6 +763,7 @@ final class AdminPages
             'expiry_months' => isset($_POST['expiry_months']) ? (int) wp_unslash($_POST['expiry_months']) : null,
             'retention_months' => isset($_POST['retention_months']) ? (int) wp_unslash($_POST['retention_months']) : null,
             'retention_basis' => isset($_POST['retention_basis']) ? sanitize_text_field(wp_unslash($_POST['retention_basis'])) : null,
+            'gdpr_export_enabled' => isset($_POST['gdpr_export_enabled']) ? (int) wp_unslash($_POST['gdpr_export_enabled']) : 0,
         ];
 
         $this->settings->update_settings($payload);
@@ -780,6 +838,7 @@ final class AdminPages
         echo '<tr><th>Business Type</th><td><input type="text" name="business_type" /></td></tr>';
         echo '<tr><th>Perfilado</th><td><label><input type="checkbox" name="can_be_profiled" value="1" checked /> Permitido</label></td></tr>';
         echo '<tr><th>Marketing</th><td><label><input type="checkbox" name="can_receive_marketing" value="1" /> Permitido</label></td></tr>';
+        echo '<tr><th>Programa de puntos</th><td><label><input type="checkbox" name="loyalty_enabled" value="1" /> En programa de puntos</label></td></tr>';
         echo '</table>';
         echo '<p class="submit"><button type="submit" name="bressol_crm_customer_create_submit" class="button button-primary">Crear cliente</button></p>';
         echo '</form>';
@@ -799,6 +858,10 @@ final class AdminPages
         $updated = isset($_GET['import_updated']) ? (int) wp_unslash($_GET['import_updated']) : 0;
         $skipped = isset($_GET['import_skipped']) ? (int) wp_unslash($_GET['import_skipped']) : 0;
         $errors = isset($_GET['import_errors']) ? (int) wp_unslash($_GET['import_errors']) : 0;
+        $pointsAwarded = isset($_GET['import_points_awarded']) ? (int) wp_unslash($_GET['import_points_awarded']) : 0;
+        $pointsSkipped = isset($_GET['import_points_skipped_no_loyalty']) ? (int) wp_unslash($_GET['import_points_skipped_no_loyalty']) : 0;
+        $ordersWithoutEmail = isset($_GET['import_orders_without_email']) ? (int) wp_unslash($_GET['import_orders_without_email']) : 0;
+        $invalidOrders = isset($_GET['import_invalid_orders']) ? (int) wp_unslash($_GET['import_invalid_orders']) : 0;
 
         echo '<h2>Importar desde WooCommerce</h2>';
         echo '<form method="post" style="margin:16px 0;">';
@@ -808,6 +871,10 @@ final class AdminPages
         echo '<input type="hidden" name="import_updated" value="' . esc_attr((string) $updated) . '" />';
         echo '<input type="hidden" name="import_skipped" value="' . esc_attr((string) $skipped) . '" />';
         echo '<input type="hidden" name="import_errors" value="' . esc_attr((string) $errors) . '" />';
+        echo '<input type="hidden" name="import_points_awarded" value="' . esc_attr((string) $pointsAwarded) . '" />';
+        echo '<input type="hidden" name="import_points_skipped_no_loyalty" value="' . esc_attr((string) $pointsSkipped) . '" />';
+        echo '<input type="hidden" name="import_orders_without_email" value="' . esc_attr((string) $ordersWithoutEmail) . '" />';
+        echo '<input type="hidden" name="import_invalid_orders" value="' . esc_attr((string) $invalidOrders) . '" />';
         echo '<table class="form-table">';
         echo '<tr><th>Statuses</th><td><input type="text" name="import_statuses" value="' . esc_attr($status) . '" placeholder="completed,processing" /></td></tr>';
         echo '<tr><th>After</th><td><input type="date" name="import_after" value="' . esc_attr($after) . '" /></td></tr>';
@@ -830,6 +897,10 @@ final class AdminPages
         echo ' | Actualizados: ' . esc_html((string) $updated);
         echo ' | Omitidos: ' . esc_html((string) $skipped);
         echo ' | Errores: ' . esc_html((string) $errors);
+        echo ' | Puntos otorgados: ' . esc_html((string) $pointsAwarded);
+        echo ' | Puntos omitidos (no loyalty): ' . esc_html((string) $pointsSkipped);
+        echo ' | Pedidos sin email: ' . esc_html((string) $ordersWithoutEmail);
+        echo ' | Pedidos inválidos: ' . esc_html((string) $invalidOrders);
         echo '</div>';
     }
 

@@ -13,6 +13,7 @@ final class CustomerService
 {
     private AuditLogger $auditLogger;
     private ?EspConsentService $espConsentService;
+    private ?bool $loyaltyColumnExists = null;
 
     public function __construct(?AuditLogger $auditLogger = null, ?EspConsentService $espConsentService = null)
     {
@@ -123,6 +124,9 @@ final class CustomerService
         $canBeProfiled = 1;
 
         $existing = $this->get_customer_by_email_type($email, $customerType);
+        if ($existing && (string) $existing->status === 'deleted') {
+            return (int) $existing->id;
+        }
 
         $data = [
             'wc_customer_id' => $this->normalize_nullable_int($this->get_order_customer_id($order)),
@@ -257,7 +261,7 @@ final class CustomerService
         }
 
         if ($shouldForceOff) {
-            $this->auditLogger->log('marketing_forced_off_esp_opt_out', 'customer', $customerId, $logChange ? get_current_user_id() : null, [
+            $this->auditLogger->log('customer_marketing_forced_off', 'customer', $customerId, $logChange ? get_current_user_id() : null, [
                 'email' => $this->mask_email((string) ($data['email'] ?? $current->email)),
                 'esp_status' => $espStatus,
             ]);
@@ -277,6 +281,14 @@ final class CustomerService
                 'ok' => false,
                 'code' => 'customer_not_found',
                 'error' => 'Cliente no encontrado.',
+            ];
+        }
+
+        if ((string) $current->status === 'deleted') {
+            return [
+                'ok' => false,
+                'code' => 'customer_deleted_locked',
+                'error' => 'Cliente eliminado. Solo se permite restaurar.',
             ];
         }
 
@@ -304,6 +316,14 @@ final class CustomerService
                     ];
                 }
             }
+
+            if (array_key_exists('loyalty_enabled', $payload)) {
+                return [
+                    'ok' => false,
+                    'code' => 'customer_anonymized_locked',
+                    'error' => 'Cliente anonimizado. No se puede modificar el programa de puntos.',
+                ];
+            }
         }
 
         $email = isset($payload['email']) ? sanitize_email((string) $payload['email']) : null;
@@ -311,12 +331,31 @@ final class CustomerService
             $email = null;
         }
 
+        $requestedMarketing = array_key_exists('can_receive_marketing', $payload)
+            ? (int) (bool) $payload['can_receive_marketing']
+            : null;
+
         $customerType = isset($payload['customer_type']) && in_array($payload['customer_type'], ['b2c', 'b2b'], true)
             ? $payload['customer_type']
             : null;
 
         $emailChanged = $email !== null && $email !== (string) $current->email;
         $typeChanged = $customerType !== null && $customerType !== (string) $current->customer_type;
+
+        $loyaltyEnabled = null;
+        if (array_key_exists('loyalty_enabled', $payload)) {
+            if ((string) $current->status !== 'active') {
+                return [
+                    'ok' => false,
+                    'code' => 'customer_status_locked',
+                    'error' => 'Cliente no activo. No se puede modificar el programa de puntos.',
+                ];
+            }
+
+            if ($this->loyalty_column_exists()) {
+                $loyaltyEnabled = (int) (bool) $payload['loyalty_enabled'];
+            }
+        }
 
         if ($emailChanged || $typeChanged) {
             $checkEmail = $email ?? (string) $current->email;
@@ -345,9 +384,16 @@ final class CustomerService
             'customer_type' => $customerType,
             'business_type' => isset($payload['business_type']) ? sanitize_text_field((string) $payload['business_type']) : null,
             'can_be_profiled' => isset($payload['can_be_profiled']) ? (int) (bool) $payload['can_be_profiled'] : null,
-            'can_receive_marketing' => isset($payload['can_receive_marketing']) ? (int) (bool) $payload['can_receive_marketing'] : null,
+            'can_receive_marketing' => $requestedMarketing,
+            'loyalty_enabled' => $loyaltyEnabled,
             'source' => 'admin',
         ];
+
+        $targetEmail = $email ?? (string) $current->email;
+        $espStatus = $this->get_esp_consent_status($targetEmail);
+        if ($requestedMarketing !== null) {
+            $this->maybe_update_esp_consent($targetEmail, $requestedMarketing, 'admin', null);
+        }
 
         $updated = $this->update_customer_fields($customerId, $data, true);
         if (!$updated) {
@@ -370,6 +416,29 @@ final class CustomerService
                 'old' => (string) $current->customer_type,
                 'new' => (string) $customerType,
             ]);
+        }
+
+        if ($requestedMarketing !== null) {
+            $finalMarketing = $requestedMarketing;
+            if ($espStatus === 'opt_out') {
+                $finalMarketing = 0;
+            }
+            if ((int) $current->can_receive_marketing !== $finalMarketing) {
+                $action = $finalMarketing === 1 ? 'customer_marketing_opt_in' : 'customer_marketing_opt_out';
+                $this->auditLogger->log($action, 'customer', $customerId, get_current_user_id(), [
+                    'source' => 'admin',
+                ]);
+            }
+        }
+
+        if ($loyaltyEnabled !== null && $this->loyalty_column_exists()) {
+            $previous = (int) ($current->loyalty_enabled ?? 0);
+            if ($previous !== $loyaltyEnabled) {
+                $action = $loyaltyEnabled === 1 ? 'customer_loyalty_enabled' : 'customer_loyalty_disabled';
+                $this->auditLogger->log($action, 'customer', $customerId, get_current_user_id(), [
+                    'source' => 'admin',
+                ]);
+            }
         }
 
         return [
@@ -410,6 +479,9 @@ final class CustomerService
 
         $canBeProfiled = isset($payload['can_be_profiled']) ? (int) (bool) $payload['can_be_profiled'] : 0;
         $canReceiveMarketing = isset($payload['can_receive_marketing']) ? (int) (bool) $payload['can_receive_marketing'] : 0;
+        $loyaltyEnabled = $this->loyalty_column_exists()
+            ? (int) (bool) ($payload['loyalty_enabled'] ?? 0)
+            : null;
 
         $warning = null;
         $warningCode = null;
@@ -431,6 +503,7 @@ final class CustomerService
             'business_type' => isset($payload['business_type']) ? sanitize_text_field((string) $payload['business_type']) : null,
             'can_be_profiled' => $canBeProfiled,
             'can_receive_marketing' => $canReceiveMarketing,
+            'loyalty_enabled' => $loyaltyEnabled,
             'status' => 'active',
             'source' => 'admin',
             'created_at' => $now,
@@ -457,6 +530,19 @@ final class CustomerService
             'customer_type' => $customerType,
         ]);
 
+        if ($canReceiveMarketing === 1 && $espStatus !== 'opt_out') {
+            $this->maybe_update_esp_consent($email, 1, 'admin', null);
+            $this->auditLogger->log('customer_marketing_opt_in', 'customer', $customerId, get_current_user_id(), [
+                'source' => 'admin',
+            ]);
+        }
+
+        if ($loyaltyEnabled === 1) {
+            $this->auditLogger->log('customer_loyalty_enabled', 'customer', $customerId, get_current_user_id(), [
+                'source' => 'admin',
+            ]);
+        }
+
         $response = [
             'ok' => true,
             'customer_id' => $customerId,
@@ -481,26 +567,37 @@ final class CustomerService
             return true;
         }
 
-        $data = [
-            'email' => 'anon+' . $customerId . '@example.invalid',
-            'first_name' => 'Anon',
-            'last_name' => 'User',
-            'phone' => null,
-            'company' => null,
-            'billing_address_1' => null,
-            'billing_address_2' => null,
-            'billing_city' => null,
-            'billing_state' => null,
-            'billing_postcode' => null,
-            'billing_country' => null,
-            'can_be_profiled' => 0,
-            'can_receive_marketing' => 0,
-            'status' => 'anonymized',
-            'source' => 'admin',
-        ];
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_crm_customers';
 
-        $updated = $this->update_customer_fields($customerId, $data, true);
-        if (!$updated) {
+        $placeholderEmail = 'anon+' . $customerId . '@example.invalid';
+
+        $updated = $wpdb->update(
+            $table,
+            [
+                'email' => $placeholderEmail,
+                'first_name' => null,
+                'last_name' => null,
+                'phone' => null,
+                'company' => null,
+                'billing_address_1' => null,
+                'billing_address_2' => null,
+                'billing_city' => null,
+                'billing_state' => null,
+                'billing_postcode' => null,
+                'billing_country' => null,
+                'can_be_profiled' => 0,
+                'can_receive_marketing' => 0,
+                'loyalty_enabled' => 0,
+                'status' => 'anonymized',
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $customerId],
+            ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s', '%s'],
+            ['%d']
+        );
+
+        if ($updated === false) {
             return false;
         }
 
@@ -522,26 +619,37 @@ final class CustomerService
             return true;
         }
 
-        $data = [
-            'email' => 'anon+' . $customerId . '@example.invalid',
-            'first_name' => 'Anon',
-            'last_name' => 'User',
-            'phone' => null,
-            'company' => null,
-            'billing_address_1' => null,
-            'billing_address_2' => null,
-            'billing_city' => null,
-            'billing_state' => null,
-            'billing_postcode' => null,
-            'billing_country' => null,
-            'can_be_profiled' => 0,
-            'can_receive_marketing' => 0,
-            'status' => 'anonymized',
-            'source' => 'cron',
-        ];
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_crm_customers';
 
-        $updated = $this->update_customer_fields($customerId, $data, false);
-        if (!$updated) {
+        $placeholderEmail = 'anon+' . $customerId . '@example.invalid';
+
+        $updated = $wpdb->update(
+            $table,
+            [
+                'email' => $placeholderEmail,
+                'first_name' => null,
+                'last_name' => null,
+                'phone' => null,
+                'company' => null,
+                'billing_address_1' => null,
+                'billing_address_2' => null,
+                'billing_city' => null,
+                'billing_state' => null,
+                'billing_postcode' => null,
+                'billing_country' => null,
+                'can_be_profiled' => 0,
+                'can_receive_marketing' => 0,
+                'loyalty_enabled' => 0,
+                'status' => 'anonymized',
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $customerId],
+            ['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s', '%s'],
+            ['%d']
+        );
+
+        if ($updated === false) {
             return false;
         }
 
@@ -626,6 +734,90 @@ final class CustomerService
         return true;
     }
 
+    public function apply_loyalty_opt_in_from_order(int $customerId, object $order): void
+    {
+        if (!$this->is_order_opt_in($order, '_bressol_loyalty_opt_in')) {
+            return;
+        }
+
+        if (!$this->loyalty_column_exists()) {
+            return;
+        }
+
+        $customer = $this->get_customer($customerId);
+        if (!$customer) {
+            return;
+        }
+
+        if ((string) $customer->status !== 'active') {
+            return;
+        }
+
+        if ((int) ($customer->loyalty_enabled ?? 0) === 1) {
+            return;
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_crm_customers';
+
+        $updated = $wpdb->update(
+            $table,
+            [
+                'loyalty_enabled' => 1,
+                'updated_at' => current_time('mysql'),
+            ],
+            ['id' => $customerId],
+            ['%d', '%s'],
+            ['%d']
+        );
+
+        if ($updated === false) {
+            return;
+        }
+
+        $proof = $this->build_checkout_proof($order);
+        $this->auditLogger->log('customer_loyalty_opt_in', 'customer', $customerId, null, $proof);
+        $this->add_customer_meta($customerId, 'loyalty_opt_in_proof', $proof);
+    }
+
+    public function apply_marketing_opt_in_from_order(int $customerId, object $order): void
+    {
+        if (!$this->is_order_opt_in($order, '_bressol_marketing_opt_in')) {
+            return;
+        }
+
+        $customer = $this->get_customer($customerId);
+        if (!$customer) {
+            return;
+        }
+
+        if ((string) $customer->status !== 'active') {
+            return;
+        }
+
+        $email = (string) $customer->email;
+        if ($email === '') {
+            return;
+        }
+
+        $espStatus = $this->get_esp_consent_status($email);
+        if ($espStatus === 'opt_out') {
+            return;
+        }
+
+        $orderId = $this->get_order_id($order);
+        $this->maybe_update_esp_consent($email, 1, 'checkout', $orderId);
+        $this->update_customer_fields($customerId, [
+            'can_receive_marketing' => 1,
+            'source' => 'checkout',
+        ], false);
+
+        $this->auditLogger->log('customer_marketing_opt_in', 'customer', $customerId, null, [
+            'source' => 'checkout',
+            'order_id' => $orderId,
+        ]);
+    }
+
     /** @return array<string, mixed> */
     public function get_export_data(int $customerId): array
     {
@@ -638,6 +830,13 @@ final class CustomerService
         $ledgerTable = $wpdb->prefix . 'bressol_crm_points_ledger';
         $redemptionsTable = $wpdb->prefix . 'bressol_crm_points_redemptions';
         $auditTable = $wpdb->prefix . 'bressol_crm_audit_logs';
+        $orderSyncTable = $wpdb->prefix . 'bressol_crm_order_sync';
+        $metaTable = $wpdb->prefix . 'bressol_crm_customer_meta';
+        $tagsTable = $wpdb->prefix . 'bressol_crm_tags';
+        $customerTagsTable = $wpdb->prefix . 'bressol_crm_customer_tags';
+
+        $pointsService = new PointsService(new Settings(), $this->auditLogger);
+        $pointsBalance = $pointsService->get_balance($customerId);
 
         $ledger = $wpdb->get_results(
             $wpdb->prepare(
@@ -654,6 +853,39 @@ final class CustomerService
             ),
             ARRAY_A
         );
+
+        $orderSync = [];
+        if ($this->order_sync_table_exists($orderSyncTable)) {
+            $orderSync = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT order_id, order_total, processed_at FROM {$orderSyncTable} WHERE customer_id = %d ORDER BY processed_at DESC",
+                    $customerId
+                ),
+                ARRAY_A
+            );
+        }
+
+        $meta = [];
+        if ($this->table_exists($metaTable)) {
+            $meta = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT meta_key, meta_value FROM {$metaTable} WHERE customer_id = %d ORDER BY id ASC",
+                    $customerId
+                ),
+                ARRAY_A
+            );
+        }
+
+        $tags = [];
+        if ($this->table_exists($tagsTable) && $this->table_exists($customerTagsTable)) {
+            $tags = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT t.id, t.name, t.slug, ct.created_at FROM {$customerTagsTable} ct INNER JOIN {$tagsTable} t ON t.id = ct.tag_id WHERE ct.customer_id = %d ORDER BY t.name ASC",
+                    $customerId
+                ),
+                ARRAY_A
+            );
+        }
 
         $auditRows = $wpdb->get_results(
             $wpdb->prepare(
@@ -675,8 +907,13 @@ final class CustomerService
 
         return [
             'customer' => $customer,
+            'marketing_state' => $this->get_effective_marketing_state((string) $customer->email),
+            'points_balance' => $pointsBalance,
             'points_ledger' => $ledger,
-            'redemptions' => $redemptions,
+            'points_redemptions' => $redemptions,
+            'order_sync' => $orderSync,
+            'customer_meta' => $meta,
+            'tags' => $tags,
             'audit' => $audit,
             'generated_at' => current_time('mysql'),
         ];
@@ -795,6 +1032,24 @@ final class CustomerService
         return $this->get_customer_by_email_type($email, $customerType);
     }
 
+    public function is_loyalty_enabled(int $customerId): bool
+    {
+        $customer = $this->get_customer($customerId);
+        if (!$customer) {
+            return false;
+        }
+
+        if (!$this->loyalty_column_exists()) {
+            return false;
+        }
+
+        if ((string) ($customer->status ?? '') !== 'active') {
+            return false;
+        }
+
+        return (int) ($customer->loyalty_enabled ?? 0) === 1;
+    }
+
     private function get_customer_by_email_type(string $email, string $customerType): ?\stdClass
     {
         global $wpdb;
@@ -810,6 +1065,24 @@ final class CustomerService
         );
 
         return $customer ?: null;
+    }
+
+    private function loyalty_column_exists(): bool
+    {
+        if ($this->loyaltyColumnExists !== null) {
+            return $this->loyaltyColumnExists;
+        }
+
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'bressol_crm_customers';
+        $column = $wpdb->get_var(
+            $wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'loyalty_enabled')
+        );
+
+        $this->loyaltyColumnExists = $column !== null;
+
+        return $this->loyaltyColumnExists;
     }
 
     private function exists_customer_by_email_type_except_id(string $email, string $customerType, int $customerId): bool
@@ -902,6 +1175,109 @@ final class CustomerService
         return $found === $table;
     }
 
+    private function maybe_update_esp_consent(string $email, int $marketingValue, string $source, ?int $orderId): bool
+    {
+        $service = $this->resolve_esp_consent_service();
+        if (!$service instanceof EspConsentService) {
+            return false;
+        }
+
+        $status = $marketingValue === 1 ? 'opt_in' : 'opt_out';
+        $current = $this->get_esp_consent_status($email);
+        if ($current === 'opt_out' && $status === 'opt_in') {
+            return false;
+        }
+
+        return $service->set_consent_status($email, $status, $source, $orderId);
+    }
+
+    private function add_customer_meta(int $customerId, string $metaKey, array $metaValue): void
+    {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'bressol_crm_customer_meta';
+        if (!$this->table_exists($table)) {
+            return;
+        }
+
+        $wpdb->insert(
+            $table,
+            [
+                'customer_id' => $customerId,
+                'meta_key' => $metaKey,
+                'meta_value' => wp_json_encode($metaValue),
+            ],
+            ['%d', '%s', '%s']
+        );
+    }
+
+    private function is_order_opt_in(object $order, string $metaKey): bool
+    {
+        if (!method_exists($order, 'get_meta')) {
+            return false;
+        }
+
+        $value = $order->get_meta($metaKey);
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $normalized = strtolower((string) $value);
+        return in_array($normalized, ['yes', '1', 'true'], true);
+    }
+
+    private function build_checkout_proof(object $order): array
+    {
+        $orderId = $this->get_order_id($order);
+        $timestamp = current_time('mysql');
+        $ipAddress = null;
+        $userAgent = null;
+
+        if (method_exists($order, 'get_customer_ip_address')) {
+            $ipAddress = sanitize_text_field((string) $order->get_customer_ip_address());
+        }
+        if (method_exists($order, 'get_customer_user_agent')) {
+            $userAgent = sanitize_text_field((string) $order->get_customer_user_agent());
+        }
+
+        if ($ipAddress === '') {
+            $ipAddress = null;
+        }
+        if ($userAgent === '') {
+            $userAgent = null;
+        }
+
+        return [
+            'source' => 'checkout',
+            'order_id' => $orderId,
+            'timestamp' => $timestamp,
+            'ip' => $ipAddress,
+            'user_agent' => $userAgent,
+        ];
+    }
+
+    private function get_order_id(object $order): ?int
+    {
+        if (!method_exists($order, 'get_id')) {
+            return null;
+        }
+
+        $orderId = (int) $order->get_id();
+        if ($orderId <= 0) {
+            return null;
+        }
+
+        return $orderId;
+    }
+
+    private function table_exists(string $table): bool
+    {
+        global $wpdb;
+
+        $found = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        return $found === $table;
+    }
+
     /** @param array<string, mixed> $data */
     private function filter_null_values(array $data): array
     {
@@ -913,57 +1289,38 @@ final class CustomerService
 
     private function get_esp_consent_status(string $email): ?string
     {
-        if ($this->espConsentService instanceof EspConsentService) {
-            return $this->espConsentService->get_consent_status($email);
+        $service = $this->resolve_esp_consent_service();
+        if ($service instanceof EspConsentService) {
+            return $service->get_consent_status($email);
         }
 
-        global $wpdb;
-
-        $table = $wpdb->prefix . 'bressol_esp_consents';
-        $tableExists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
-        if ($tableExists !== $table) {
-            return null;
-        }
-
-        $status = $wpdb->get_var(
-            $wpdb->prepare("SELECT status FROM {$table} WHERE email = %s LIMIT 1", $email)
-        );
-
-        return $status ? (string) $status : null;
+        return null;
     }
 
     /** @return array<string, string|null>|null */
     private function get_esp_consent_details(string $email): ?array
     {
+        $service = $this->resolve_esp_consent_service();
+        if ($service instanceof EspConsentService) {
+            return $service->get_consent_details($email);
+        }
+
+        return null;
+    }
+
+    private function resolve_esp_consent_service(): ?EspConsentService
+    {
         if ($this->espConsentService instanceof EspConsentService) {
-            return $this->espConsentService->get_consent_details($email);
+            return $this->espConsentService;
         }
 
-        global $wpdb;
-
-        $table = $wpdb->prefix . 'bressol_esp_consents';
-        $tableExists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
-        if ($tableExists !== $table) {
+        if (!class_exists(EspConsentService::class)) {
             return null;
         }
 
-        $row = $wpdb->get_row(
-            $wpdb->prepare(
-                "SELECT status, updated_at, source FROM {$table} WHERE email = %s LIMIT 1",
-                $email
-            )
-        );
+        $this->espConsentService = new EspConsentService();
 
-        if (!$row) {
-            return null;
-        }
-
-        return [
-            'status' => (string) $row->status,
-            'updated_at' => $row->updated_at ? (string) $row->updated_at : null,
-            'source' => $row->source ? (string) $row->source : null,
-            'proof' => null,
-        ];
+        return $this->espConsentService;
     }
 
     private function mask_email(string $email): string

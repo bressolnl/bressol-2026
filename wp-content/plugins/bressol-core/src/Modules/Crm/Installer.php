@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 
 final class Installer
 {
-    public const VERSION = '1.2.0';
+    public const VERSION = '1.3.0';
 
     public static function maybe_upgrade(): void
     {
@@ -56,6 +56,7 @@ final class Installer
             source VARCHAR(20) NOT NULL DEFAULT 'order',
             can_be_profiled TINYINT(1) NOT NULL DEFAULT 1,
             can_receive_marketing TINYINT(1) NOT NULL DEFAULT 1,
+            loyalty_enabled TINYINT(1) NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL,
             updated_at DATETIME NOT NULL,
             PRIMARY KEY (id),
@@ -157,7 +158,7 @@ final class Installer
         // Manual test (activation): deactivate/activate plugin and verify table exists via
         // wp db query "SHOW TABLES LIKE '%bressol_crm_order_sync%'".
         // Manual test (upgrade): set bressol_crm_version to 1.1.0 and reload admin,
-        // then confirm order_sync table exists and version updated to 1.2.0.
+        // then confirm order_sync table exists and version updated to 1.3.0.
         update_option('bressol_crm_version', self::VERSION);
     }
 }

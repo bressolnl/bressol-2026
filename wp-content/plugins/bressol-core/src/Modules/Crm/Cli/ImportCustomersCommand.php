@@ -80,5 +80,9 @@ final class ImportCustomersCommand
         \WP_CLI::log(' - Clientes actualizados: ' . (int) ($totals['customers_updated'] ?? 0));
         \WP_CLI::log(' - Omitidos: ' . (int) ($totals['skipped'] ?? 0));
         \WP_CLI::log(' - Errores: ' . (int) ($totals['errors'] ?? 0));
+        \WP_CLI::log(' - Puntos otorgados: ' . (int) ($totals['points_awarded'] ?? 0));
+        \WP_CLI::log(' - Puntos omitidos (no loyalty): ' . (int) ($totals['points_skipped_no_loyalty'] ?? 0));
+        \WP_CLI::log(' - Pedidos sin email: ' . (int) ($totals['orders_without_email'] ?? 0));
+        \WP_CLI::log(' - Pedidos inválidos: ' . (int) ($totals['invalid_orders'] ?? 0));
     }
 }

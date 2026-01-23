@@ -35,9 +35,37 @@ final class ImportCustomersService
             : null;
 
         $status = isset($options['status']) && $options['status'] !== null ? (string) $options['status'] : 'completed,processing';
-        $statuses = array_filter(array_map('sanitize_text_field', explode(',', $status)));
+       $rawStatuses = array_filter(array_map('sanitize_text_field', explode(',', $status)));
+        if ($rawStatuses === []) {
+            $rawStatuses = ['completed', 'processing'];
+        }
+
+        $allowedStatusesRaw = function_exists('wc_get_order_statuses') ? array_keys(wc_get_order_statuses()) : [];
+        $allowedStatuses = array_values(array_unique(array_map(
+            static function (string $status): string {
+                return str_starts_with($status, 'wc-') ? substr($status, 3) : $status;
+            },
+            $allowedStatusesRaw
+        )));
+        $statuses = [];
+        $invalidStatuses = [];
+        foreach ($rawStatuses as $rawStatus) {
+            $normalized = str_starts_with($rawStatus, 'wc-') ? substr($rawStatus, 3) : $rawStatus;
+            if ($allowedStatuses !== [] && !in_array($normalized, $allowedStatuses, true)) {
+                $invalidStatuses[] = $rawStatus;
+                continue;
+            }
+            $statuses[] = $normalized;
+        }
+        if ($invalidStatuses !== []) {
+            return [
+                'error' => 'Estados inválidos: ' . implode(', ', $invalidStatuses),
+            ];
+        }
         if ($statuses === []) {
-            $statuses = ['completed', 'processing'];
+            return [
+                'error' => 'Estados inválidos. Usa estados de WooCommerce (ej: completed,processing).',
+            ];
         }
 
         $after = isset($options['after']) ? (string) $options['after'] : '';
@@ -50,6 +78,11 @@ final class ImportCustomersService
         if ($before !== '' && strtotime($before) === false) {
             return [
                 'error' => 'Formato inválido para --before. Usa YYYY-MM-DD.',
+            ];
+        }
+        if ($after !== '' && $before !== '' && strtotime($after) > strtotime($before)) {
+            return [
+                'error' => 'Rango inválido: --after no puede ser posterior a --before.',
             ];
         }
 
@@ -92,12 +125,17 @@ final class ImportCustomersService
             'customers_updated' => 0,
             'skipped' => 0,
             'errors' => 0,
+            'points_awarded' => 0,
+            'points_skipped_no_loyalty' => 0,
+            'orders_without_email' => 0,
+            'invalid_orders' => 0,
         ];
 
         foreach ($orderIds as $orderId) {
             $order = wc_get_order((int) $orderId);
             if (!$order) {
                 $totals['skipped']++;
+                $totals['invalid_orders']++;
                 $this->log($logger, 'Pedido inválido: #' . (int) $orderId, 'error');
                 continue;
             }
@@ -105,6 +143,7 @@ final class ImportCustomersService
             $email = method_exists($order, 'get_billing_email') ? sanitize_email((string) $order->get_billing_email()) : '';
             if ($email === '') {
                 $totals['skipped']++;
+                $totals['orders_without_email']++;
                 $this->log($logger, 'Pedido sin email: #' . (int) $orderId, 'error');
                 continue;
             }
@@ -127,11 +166,16 @@ final class ImportCustomersService
 
                     $this->customerService->update_metrics_from_order($customerId, $order);
                     if ($withPoints) {
-                        $this->pointsService->award_points_for_order(
-                            $customerId,
-                            $order,
-                            $this->customerService->get_customer_type($customerId)
-                        );
+                       if ($this->customerService->is_loyalty_enabled($customerId)) {
+                            $this->pointsService->award_points_for_order(
+                                $customerId,
+                                $order,
+                                $this->customerService->get_customer_type($customerId)
+                            );
+                            $totals['points_awarded']++;
+                        } else {
+                            $totals['points_skipped_no_loyalty']++;
+                        }
                     }
                 }
 
