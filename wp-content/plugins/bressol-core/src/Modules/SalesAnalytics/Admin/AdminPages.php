@@ -9,6 +9,8 @@ use Bressol\Modules\SalesAnalytics\Services\CacheService;
 use Bressol\Modules\SalesAnalytics\Services\MetricsExtractor;
 use Bressol\Modules\SalesAnalytics\Services\Settings;
 use Bressol\Modules\SalesAnalytics\Services\TaxBreakdownService;
+use Bressol\Modules\MarketsEvents\Services\MarketsEventsPosMarketProvider;
+use Bressol\Modules\Pos\Services\PosMarketsCatalog;
 use Bressol\Modules\Pos\Services\PosSettings;
 
 if (!defined('ABSPATH')) {
@@ -444,7 +446,13 @@ final class AdminPages
         $html .= '<option value="">Todos</option>';
         foreach ($markets as $market) {
             $marketId = (string) ($market['id'] ?? '');
+            if ($marketId === '') {
+                continue;
+            }
             $marketName = (string) ($market['name'] ?? '');
+            if ($marketName === '') {
+                $marketName = $marketId;
+            }
             $html .= '<option value="' . esc_attr($marketId) . '" ' . selected((string) $filters['market_id'], $marketId, false) . '>'
                 . esc_html($marketName) . '</option>';
         }
@@ -554,13 +562,11 @@ final class AdminPages
     /** @return array<int, array<string, mixed>> */
     private function get_pos_markets(): array
     {
-        if (!class_exists(PosSettings::class)) {
+        if (!class_exists(PosMarketsCatalog::class) || !class_exists(MarketsEventsPosMarketProvider::class)) {
             return [];
         }
 
-        $settings = new PosSettings();
-        $markets = $settings->get_markets();
-
-        return is_array($markets) ? $markets : [];
+        $catalog = new PosMarketsCatalog(new MarketsEventsPosMarketProvider(), new PosSettings());
+        return $catalog->list();
     }
 }
