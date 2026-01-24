@@ -43,14 +43,13 @@ final class AdminPages
     {
         $capability = $this->get_capability();
 
-        add_menu_page(
+        add_submenu_page(
+            'bressol',
             'CRM',
             'CRM',
             $capability,
             'bressol-crm',
-            [$this, 'renderCustomersPage'],
-            'dashicons-id-alt',
-            56
+            [$this, 'renderCustomersPage']
         );
 
         add_submenu_page(

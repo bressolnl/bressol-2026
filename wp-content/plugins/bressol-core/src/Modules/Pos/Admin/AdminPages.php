@@ -40,7 +40,7 @@ final class AdminPages
             'bressol-pos',
             [$this, 'renderNewSalePage'],
             'dashicons-cart',
-            56
+            57
         );
 
         add_submenu_page(

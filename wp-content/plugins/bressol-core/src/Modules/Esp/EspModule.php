@@ -1103,14 +1103,13 @@ final class EspModule implements ModuleInterface
     {
         $capability = 'manage_options';
 
-        add_menu_page(
+        add_submenu_page(
+            'bressol',
             'Bressol ESP',
             'Bressol ESP',
             $capability,
             'bressol-esp',
-            [AdminPages::class, 'renderOverview'],
-            'dashicons-email-alt2',
-            56
+            [AdminPages::class, 'renderOverview']
         );
 
         add_submenu_page(
