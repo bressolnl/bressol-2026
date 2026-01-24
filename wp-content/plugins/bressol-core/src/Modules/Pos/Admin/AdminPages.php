@@ -5,10 +5,8 @@ namespace Bressol\Modules\Pos\Admin;
 
 use Bressol\Modules\Crm\Services\AuditLogger;
 use Bressol\Modules\Crm\Services\CustomerService;
-use Bressol\Modules\MarketsEvents\Services\MarketsEventsPosMarketProvider;
-use Bressol\Modules\Pos\Services\CustomerLookupService;
-use Bressol\Modules\Pos\Services\PosMarketsCatalog;
 use Bressol\Modules\Pos\Services\PosSettings;
+use Bressol\Modules\Pos\Services\CustomerLookupService;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -97,7 +95,8 @@ final class AdminPages
         echo '<select data-pos-market-select required>';
         echo '<option value="">Selecciona un mercado</option>';
         echo '</select>';
-        echo '<p class="bressol-pos__muted" data-pos-active-event>Evento activo: sin selección</p>';
+        echo '<label style="margin-top:8px;">Coste mercado (€)</label>';
+        echo '<input type="number" min="0" step="0.01" data-pos-market-cost value="0" />';
         echo '</div>';
 
         echo '<div class="bressol-pos__panel">';
@@ -130,23 +129,6 @@ final class AdminPages
         echo '<button type="button" class="button" data-pos-product-search>Buscar</button>';
         echo '</div>';
         echo '<div data-pos-product-results class="bressol-pos__results"></div>';
-        echo '</div>';
-
-        echo '<div class="bressol-pos__panel">';
-        echo '<h2>Sampling</h2>';
-        echo '<label>Producto</label>';
-        echo '<div class="bressol-pos__row">';
-        echo '<input type="text" data-pos-sampling-query placeholder="Buscar por nombre o SKU" />';
-        echo '<button type="button" class="button" data-pos-sampling-search>Buscar</button>';
-        echo '</div>';
-        echo '<div data-pos-sampling-results class="bressol-pos__results"></div>';
-        echo '<p class="bressol-pos__muted" data-pos-sampling-selected>Sin producto seleccionado.</p>';
-        echo '<div class="bressol-pos__row">';
-        echo '<label style="margin-right:8px;">Cantidad</label>';
-        echo '<input type="number" min="1" value="1" data-pos-sampling-qty style="max-width:120px;" />';
-        echo '<button type="button" class="button" data-pos-sampling-open>Abrir para probar</button>';
-        echo '</div>';
-        echo '<p data-pos-sampling-feedback class="bressol-pos__feedback"></p>';
         echo '</div>';
 
         echo '<div class="bressol-pos__panel">';
@@ -243,8 +225,7 @@ final class AdminPages
         $this->handle_markets_post();
 
         $settings = $this->settings->get_settings();
-        $catalog = new PosMarketsCatalog(new MarketsEventsPosMarketProvider(), $this->settings);
-        $markets = $catalog->list();
+        $markets = $this->settings->get_markets();
         $statuses = $this->settings->get_allowed_order_statuses();
 
         echo '<div class="wrap bressol-pos">';
@@ -286,40 +267,31 @@ final class AdminPages
         }
         foreach ($markets as $market) {
             $marketId = (string) ($market['id'] ?? '');
-            if ($marketId === '') {
-                continue;
-            }
             $name = (string) ($market['name'] ?? '');
-            $isEventMarket = $this->is_event_market_id($marketId);
-            $active = $isEventMarket ? true : !empty($market['active']);
+            $active = !empty($market['active']);
             $costCents = (int) ($market['default_cost_cents'] ?? 0);
             $costEuros = number_format($costCents / 100, 2, '.', '');
             $formId = 'bressol_pos_market_' . $marketId;
-            $disabled = $isEventMarket ? ' disabled' : '';
 
             echo '<tr>';
-            echo '<td><input type="text" name="market_name" form="' . esc_attr($formId) . '" value="' . esc_attr($name) . '" required' . $disabled . ' /></td>';
-            echo '<td><label><input type="checkbox" name="market_active" form="' . esc_attr($formId) . '" value="1" ' . checked($active, true, false) . $disabled . ' /> Activo</label></td>';
-            echo '<td><input type="number" step="0.01" min="0" name="market_default_cost" form="' . esc_attr($formId) . '" value="' . esc_attr($costEuros) . '"' . $disabled . ' /></td>';
+            echo '<td><input type="text" name="market_name" form="' . esc_attr($formId) . '" value="' . esc_attr($name) . '" required /></td>';
+            echo '<td><label><input type="checkbox" name="market_active" form="' . esc_attr($formId) . '" value="1" ' . checked($active, true, false) . ' /> Activo</label></td>';
+            echo '<td><input type="number" step="0.01" min="0" name="market_default_cost" form="' . esc_attr($formId) . '" value="' . esc_attr($costEuros) . '" /></td>';
             echo '<td>';
-            if ($isEventMarket) {
-                echo '<span class="description">No editable</span>';
-            } else {
-                echo '<form method="post" id="' . esc_attr($formId) . '" style="display:inline-block;">';
-                wp_nonce_field('bressol_pos_market_save');
-                echo '<input type="hidden" name="market_id" value="' . esc_attr($marketId) . '" />';
-                echo '<button type="submit" name="bressol_pos_market_save_submit" class="button">Guardar</button> ';
-                echo '</form>';
+            echo '<form method="post" id="' . esc_attr($formId) . '" style="display:inline-block;">';
+            wp_nonce_field('bressol_pos_market_save');
+            echo '<input type="hidden" name="market_id" value="' . esc_attr($marketId) . '" />';
+            echo '<button type="submit" name="bressol_pos_market_save_submit" class="button">Guardar</button> ';
+            echo '</form>';
 
-                echo '<form method="post" style="display:inline-block;margin-left:6px;">';
-                wp_nonce_field('bressol_pos_market_toggle');
-                echo '<input type="hidden" name="market_id" value="' . esc_attr($marketId) . '" />';
-                echo '<input type="hidden" name="market_active" value="' . ($active ? '0' : '1') . '" />';
-                echo '<button type="submit" name="bressol_pos_market_toggle_submit" class="button">';
-                echo $active ? 'Desactivar' : 'Activar';
-                echo '</button>';
-                echo '</form>';
-            }
+            echo '<form method="post" style="display:inline-block;margin-left:6px;">';
+            wp_nonce_field('bressol_pos_market_toggle');
+            echo '<input type="hidden" name="market_id" value="' . esc_attr($marketId) . '" />';
+            echo '<input type="hidden" name="market_active" value="' . ($active ? '0' : '1') . '" />';
+            echo '<button type="submit" name="bressol_pos_market_toggle_submit" class="button">';
+            echo $active ? 'Desactivar' : 'Activar';
+            echo '</button>';
+            echo '</form>';
             echo '</td>';
             echo '</tr>';
         }
@@ -420,10 +392,6 @@ final class AdminPages
                 add_settings_error('bressol_pos', 'pos_market_invalid', 'Mercado inválido.', 'error');
                 return;
             }
-            if ($this->is_event_market_id($marketId)) {
-                add_settings_error('bressol_pos', 'pos_market_readonly', 'Los mercados de eventos no son editables aquí.', 'error');
-                return;
-            }
 
             $active = !empty($_POST['market_active']);
             $rawCost = isset($_POST['market_default_cost']) ? wp_unslash($_POST['market_default_cost']) : '0';
@@ -445,10 +413,6 @@ final class AdminPages
                 add_settings_error('bressol_pos', 'pos_market_invalid', 'Mercado inválido.', 'error');
                 return;
             }
-            if ($this->is_event_market_id($marketId)) {
-                add_settings_error('bressol_pos', 'pos_market_readonly', 'Los mercados de eventos no son editables aquí.', 'error');
-                return;
-            }
 
             $active = !empty($_POST['market_active']);
             if ($this->settings->set_market_active($marketId, $active)) {
@@ -468,11 +432,6 @@ final class AdminPages
         $cents = (int) round($float * 100);
 
         return max(0, $cents);
-    }
-
-    private function is_event_market_id(string $marketId): bool
-    {
-        return strpos($marketId, 'event:') === 0;
     }
 
     /** @param array<string, mixed> $context */
