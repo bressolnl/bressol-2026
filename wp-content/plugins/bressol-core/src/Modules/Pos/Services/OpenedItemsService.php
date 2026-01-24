@@ -72,6 +72,20 @@ final class OpenedItemsService
         return $this->repository->list_open_items($limit, $offset);
     }
 
+    /** @return array<int, array<string, mixed>> */
+    public function list_open_items_for_event(int $eventId, int $limit = 50, int $page = 1): array
+    {
+        if ($eventId <= 0) {
+            throw new \InvalidArgumentException('event_id must be > 0');
+        }
+
+        $limit = max(1, min(200, $limit));
+        $page = max(1, $page);
+        $offset = ($page - 1) * $limit;
+
+        return $this->repository->list_open_items_for_event($eventId, $limit, $offset);
+    }
+
     /** @param int[] $ids */
     public function discard_opened_items(array $ids, string $reason): int
     {
@@ -83,12 +97,58 @@ final class OpenedItemsService
         }
 
         $reason = sanitize_text_field($reason);
-        $reason = substr($reason, 0, 255);
+        $reason = substr($reason, 0, 50);
         if ($reason === '') {
             throw new \InvalidArgumentException('discard_reason required');
         }
 
         $discardedAt = current_time('mysql');
         return $this->repository->discard_items($ids, $reason, $discardedAt);
+    }
+
+    public function add_usage_event(int $openedItemId, int $eventId, string $note = ''): int
+    {
+        if ($openedItemId <= 0) {
+            throw new \InvalidArgumentException('opened_item_id must be > 0');
+        }
+        if ($eventId <= 0) {
+            throw new \InvalidArgumentException('event_id must be > 0');
+        }
+
+        $note = sanitize_text_field($note);
+        $note = substr($note, 0, 50);
+
+        $data = [
+            'opened_item_id' => $openedItemId,
+            'event_id' => $eventId,
+            'used_at' => current_time('mysql'),
+            'note' => $note !== '' ? $note : '',
+        ];
+
+        $id = $this->repository->insert_opened_item_event($data);
+        if ($id <= 0) {
+            throw new \RuntimeException('failed to create opened item event');
+        }
+
+        return $id;
+    }
+
+    public function add_usage_event_if_missing(int $openedItemId, int $eventId, string $note = ''): int
+    {
+        if ($openedItemId <= 0) {
+            throw new \InvalidArgumentException('opened_item_id must be > 0');
+        }
+        if ($eventId <= 0) {
+            throw new \InvalidArgumentException('event_id must be > 0');
+        }
+
+        $note = sanitize_text_field($note);
+        $note = substr($note, 0, 50);
+
+        if ($this->repository->has_opened_item_event($openedItemId, $eventId, $note)) {
+            return 0;
+        }
+
+        return $this->add_usage_event($openedItemId, $eventId, $note);
     }
 }

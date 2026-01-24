@@ -65,6 +65,7 @@ final class PosModule implements ModuleInterface
         add_action('wp_ajax_bressol_pos_open_sampling_item', [$this, 'handleOpenSamplingItemAjax']);
         add_action('wp_ajax_bressol_pos_list_opened_items', [$this, 'handleListOpenedItemsAjax']);
         add_action('wp_ajax_bressol_pos_discard_opened_items', [$this, 'handleDiscardOpenedItemsAjax']);
+        add_action('wp_ajax_bressol_pos_mark_opened_items_used', [$this, 'handleMarkOpenedItemsUsedAjax']);
     }
 
     public function enqueueAdminAssets(string $hook): void
@@ -101,6 +102,7 @@ final class PosModule implements ModuleInterface
             'openSamplingAction' => 'bressol_pos_open_sampling_item',
             'listOpenedItemsNonce' => wp_create_nonce('bressol_pos_list_opened_items'),
             'discardOpenedItemsNonce' => wp_create_nonce('bressol_pos_discard_opened_items'),
+            'markOpenedItemsUsedNonce' => wp_create_nonce('bressol_pos_mark_opened_items_used'),
             'pointsValueCents' => $settings->get_points_value_cents(),
             'minRedemptionPoints' => $settings->get_min_redemption_points(),
             'maxRedemptionPercent' => $settings->get_max_redemption_percent_of_order(),
@@ -437,6 +439,13 @@ final class PosModule implements ModuleInterface
             $this->send_pos_error('pos_opened_item_failed', $exception->getMessage(), 422);
         }
 
+        try {
+            $openedItemsService->add_usage_event($openedItemId, $eventId, 'opened');
+        } catch (\Throwable $exception) {
+            $service->mark_internal_invalid($orderId);
+            $this->send_pos_error('pos_opened_item_failed', $exception->getMessage(), 422);
+        }
+
         $order = wc_get_order($orderId);
         if (!$order instanceof \WC_Order) {
             $service->mark_internal_invalid($orderId);
@@ -482,11 +491,28 @@ final class PosModule implements ModuleInterface
         check_ajax_referer('bressol_pos_list_opened_items', 'nonce');
         $this->rate_limit_or_fail('list_opened_items', 30, 20);
 
+        $marketId = isset($_POST['market_id']) ? sanitize_text_field(wp_unslash($_POST['market_id'])) : '';
+        $eventId = isset($_POST['event_id']) ? absint($_POST['event_id']) : 0;
         $limit = isset($_POST['limit']) ? absint($_POST['limit']) : 50;
         $page = isset($_POST['page']) ? absint($_POST['page']) : 1;
 
+        $resolver = new PosMarketResolver(new PosSettings());
+        try {
+            if ($marketId !== '') {
+                $resolved = $resolver->resolve($marketId);
+                $eventId = (int) $resolved['event_id'];
+            } elseif ($eventId > 0) {
+                $resolved = $resolver->resolve('event:' . $eventId);
+                $eventId = (int) $resolved['event_id'];
+            } else {
+                $this->send_pos_error('pos_invalid_event', 'Evento inválido.', 422);
+            }
+        } catch (\Throwable $exception) {
+            $this->send_pos_error('pos_invalid_event', 'Evento inválido.', 422);
+        }
+
         $service = new OpenedItemsService();
-        $items = $service->list_open_items($limit, $page);
+        $items = $service->list_open_items_for_event($eventId, $limit, $page);
 
         $payload = [];
         foreach ($items as $item) {
@@ -509,6 +535,7 @@ final class PosModule implements ModuleInterface
                 'initial_qty' => (int) ($item['initial_qty'] ?? 0),
                 'internal_order_id' => (int) ($item['internal_order_id'] ?? 0),
                 'status' => (string) ($item['status'] ?? ''),
+                'used_today' => !empty($item['used_today']),
             ];
         }
 
@@ -526,9 +553,26 @@ final class PosModule implements ModuleInterface
         check_ajax_referer('bressol_pos_discard_opened_items', 'nonce');
         $this->rate_limit_or_fail('discard_opened_items', 20, 20);
 
+        $marketId = isset($_POST['market_id']) ? sanitize_text_field(wp_unslash($_POST['market_id'])) : '';
+        $eventId = isset($_POST['event_id']) ? absint($_POST['event_id']) : 0;
         $idsRaw = isset($_POST['opened_item_ids']) ? wp_unslash($_POST['opened_item_ids']) : null;
         $singleId = isset($_POST['opened_item_id']) ? absint($_POST['opened_item_id']) : 0;
         $reason = isset($_POST['reason']) ? sanitize_text_field(wp_unslash($_POST['reason'])) : '';
+
+        $resolver = new PosMarketResolver(new PosSettings());
+        try {
+            if ($marketId !== '') {
+                $resolved = $resolver->resolve($marketId);
+                $eventId = (int) $resolved['event_id'];
+            } elseif ($eventId > 0) {
+                $resolved = $resolver->resolve('event:' . $eventId);
+                $eventId = (int) $resolved['event_id'];
+            } else {
+                $this->send_pos_error('pos_invalid_event', 'Evento inválido.', 422);
+            }
+        } catch (\Throwable $exception) {
+            $this->send_pos_error('pos_invalid_event', 'Evento inválido.', 422);
+        }
 
         $ids = [];
         if (is_string($idsRaw) && $idsRaw !== '') {
@@ -548,8 +592,77 @@ final class PosModule implements ModuleInterface
             $this->send_pos_error('pos_discard_failed', $exception->getMessage(), 422);
         }
 
+        foreach ($ids as $openedItemId) {
+            try {
+                $service->add_usage_event_if_missing($openedItemId, $eventId, 'discarded');
+            } catch (\Throwable $exception) {
+                $this->send_pos_error('pos_opened_item_failed', $exception->getMessage(), 422);
+            }
+        }
+
         wp_send_json_success([
             'discarded' => $updated,
+        ]);
+    }
+
+    public function handleMarkOpenedItemsUsedAjax(): void
+    {
+        if (!current_user_can($this->get_capability())) {
+            $this->send_pos_error('pos_forbidden', 'No autorizado.', 403);
+        }
+
+        check_ajax_referer('bressol_pos_mark_opened_items_used', 'nonce');
+        $this->rate_limit_or_fail('mark_opened_items_used', 20, 20);
+
+        $marketId = isset($_POST['market_id']) ? sanitize_text_field(wp_unslash($_POST['market_id'])) : '';
+        $eventId = isset($_POST['event_id']) ? absint($_POST['event_id']) : 0;
+        $idsRaw = isset($_POST['opened_item_ids']) ? wp_unslash($_POST['opened_item_ids']) : null;
+        $note = isset($_POST['note']) ? sanitize_text_field(wp_unslash($_POST['note'])) : '';
+
+        $resolver = new PosMarketResolver(new PosSettings());
+        try {
+            if ($marketId !== '') {
+                $resolved = $resolver->resolve($marketId);
+                $eventId = (int) $resolved['event_id'];
+            } elseif ($eventId > 0) {
+                $resolved = $resolver->resolve('event:' . $eventId);
+                $eventId = (int) $resolved['event_id'];
+            } else {
+                $this->send_pos_error('pos_invalid_event', 'Evento inválido.', 422);
+            }
+        } catch (\Throwable $exception) {
+            $this->send_pos_error('pos_invalid_event', 'Evento inválido.', 422);
+        }
+
+        $ids = [];
+        if (is_string($idsRaw) && $idsRaw !== '') {
+            $decoded = json_decode($idsRaw, true);
+            if (is_array($decoded)) {
+                $ids = array_map('intval', $decoded);
+            }
+        } elseif (is_array($idsRaw)) {
+            $ids = array_map('intval', $idsRaw);
+        }
+        $ids = array_values(array_filter($ids, static function (int $id): bool {
+            return $id > 0;
+        }));
+
+        if ($ids === []) {
+            $this->send_pos_error('pos_opened_items_missing', 'Items obligatorios.', 422);
+        }
+
+        $service = new OpenedItemsService();
+        $created = 0;
+        foreach ($ids as $openedItemId) {
+            try {
+                $created += $service->add_usage_event_if_missing($openedItemId, $eventId, $note) > 0 ? 1 : 0;
+            } catch (\Throwable $exception) {
+                $this->send_pos_error('pos_opened_item_failed', $exception->getMessage(), 422);
+            }
+        }
+
+        wp_send_json_success([
+            'created' => $created,
         ]);
     }
 
