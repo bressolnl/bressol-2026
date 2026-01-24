@@ -30,6 +30,7 @@ Arbol de conocimiento
 - `docs/brain/modules/15-crm.md`
 - `docs/brain/modules/16-esp.md`
 - `docs/brain/modules/17-pos.md`
+- `docs/brain/modules/18-sales-analytics.md`
 
 5) Theme
 - `docs/brain/theme/00-bressol-theme.md`

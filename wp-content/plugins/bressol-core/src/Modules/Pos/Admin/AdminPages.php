@@ -305,96 +305,14 @@ final class AdminPages
             wp_die('No autorizado.');
         }
 
-        $filters = $this->get_report_filters();
-        $this->handle_report_export($filters);
-
-        $limit = 20;
-        $paged = isset($_GET['paged']) ? max(1, absint($_GET['paged'])) : 1;
-        $offset = ($paged - 1) * $limit;
-
-        $queryArgs = $this->build_report_query_args($filters, $limit, $offset, true);
-        $results = wc_get_orders($queryArgs);
-        $orders = is_object($results) && property_exists($results, 'orders') ? $results->orders : [];
-        $total = is_object($results) && property_exists($results, 'total') ? (int) $results->total : 0;
-
-        $metrics = $this->compute_report_metrics($filters);
-        $markets = $this->settings->get_markets();
+        $salesAnalyticsUrl = admin_url('admin.php?page=bressol-sales-analytics');
 
         echo '<div class="wrap bressol-pos">';
         echo '<h1>POS - Reportes</h1>';
-
-        echo '<form method="get" style="margin:16px 0;">';
-        echo '<input type="hidden" name="page" value="bressol-pos-reports" />';
-        echo '<label>Mercado ';
-        echo '<select name="market_id">';
-        echo '<option value="">Todos</option>';
-        foreach ($markets as $market) {
-            $marketId = (string) ($market['id'] ?? '');
-            $marketName = (string) ($market['name'] ?? '');
-            echo '<option value="' . esc_attr($marketId) . '" ' . selected($filters['market_id'], $marketId, false) . '>'
-                . esc_html($marketName) . '</option>';
-        }
-        echo '</select></label> ';
-        echo '<label>Desde <input type="date" name="after" value="' . esc_attr($filters['after'] ?? '') . '" /></label> ';
-        echo '<label>Hasta <input type="date" name="before" value="' . esc_attr($filters['before'] ?? '') . '" /></label> ';
-        echo '<button class="button">Filtrar</button>';
-        echo '</form>';
-
-        echo '<h2>Métricas</h2>';
-        echo '<table class="widefat striped" style="max-width:820px;">';
-        echo '<tbody>';
-        echo '<tr><th>Total ventas (gross)</th><td>' . esc_html(number_format($metrics['gross'], 2)) . '</td></tr>';
-        echo '<tr><th>Total impuestos</th><td>' . esc_html(number_format($metrics['tax'], 2)) . '</td></tr>';
-        echo '<tr><th>Total neto (estimado)</th><td>' . esc_html(number_format($metrics['net'], 2)) . '</td></tr>';
-        echo '<tr><th>Total envíos</th><td>' . esc_html(number_format($metrics['shipping'], 2)) . '</td></tr>';
-        echo '<tr><th>Total coste mercado</th><td>' . esc_html(number_format($metrics['market_cost'], 2)) . '</td></tr>';
-        echo '<tr><th>Beneficio estimado</th><td>' . esc_html(number_format($metrics['profit'], 2)) . '</td></tr>';
-        echo '<tr><th>Nº pedidos POS</th><td>' . esc_html((string) $metrics['count']) . '</td></tr>';
-        echo '</tbody></table>';
-        echo '<p class="description">Beneficio estimado = gross - tax - market_cost (simplificación contable).</p>';
-
-        echo '<h2>Pedidos POS</h2>';
-        echo '<form method="post" style="margin:12px 0;">';
-        wp_nonce_field('bressol_pos_reports_export');
-        echo '<input type="hidden" name="market_id" value="' . esc_attr($filters['market_id']) . '" />';
-        echo '<input type="hidden" name="after" value="' . esc_attr($filters['after'] ?? '') . '" />';
-        echo '<input type="hidden" name="before" value="' . esc_attr($filters['before'] ?? '') . '" />';
-        echo '<input type="hidden" name="limit" value="' . esc_attr((string) $limit) . '" />';
-        echo '<input type="hidden" name="offset" value="' . esc_attr((string) $offset) . '" />';
-        echo '<button type="submit" name="bressol_pos_export_submit" class="button">Exportar CSV (página actual)</button>';
-        echo '</form>';
-
-        echo '<table class="widefat striped">';
-        echo '<thead><tr><th>ID</th><th>Fecha</th><th>Total</th><th>Tax</th><th>Market</th><th>Coste mercado</th><th>Puntos</th><th>Redención</th></tr></thead>';
-        echo '<tbody>';
-        if (empty($orders)) {
-            echo '<tr><td colspan="8">No hay pedidos POS.</td></tr>';
-        }
-        foreach ($orders as $order) {
-            if (!$order instanceof \WC_Order) {
-                continue;
-            }
-            $marketName = (string) $order->get_meta('_bressol_pos_market_name');
-            $marketCostCents = (int) $order->get_meta('_bressol_pos_market_cost_cents');
-            $pointsRedeemed = (int) $order->get_meta('_bressol_pos_points_redeemed');
-            $redemptionValue = (int) $order->get_meta('_bressol_pos_redemption_value_cents');
-            $date = $order->get_date_created();
-            $dateText = $date ? $date->date('Y-m-d H:i:s') : '';
-
-            echo '<tr>';
-            echo '<td>' . esc_html((string) $order->get_id()) . '</td>';
-            echo '<td>' . esc_html($dateText) . '</td>';
-            echo '<td>' . esc_html(number_format((float) $order->get_total(), 2)) . '</td>';
-            echo '<td>' . esc_html(number_format((float) $order->get_total_tax(), 2)) . '</td>';
-            echo '<td>' . esc_html($marketName) . '</td>';
-            echo '<td>' . esc_html(number_format($marketCostCents / 100, 2)) . '</td>';
-            echo '<td>' . esc_html((string) $pointsRedeemed) . '</td>';
-            echo '<td>' . esc_html(number_format($redemptionValue / 100, 2)) . '</td>';
-            echo '</tr>';
-        }
-        echo '</tbody></table>';
-
-        $this->render_report_pagination($paged, $limit, $total, $filters);
+        echo '<p class="notice notice-info" style="padding:8px 12px;">';
+        echo 'Los reportes se han centralizado en Sales Analytics. ';
+        echo '<a href="' . esc_url($salesAnalyticsUrl) . '">Ir a Sales Analytics</a>.';
+        echo '</p>';
 
         echo '</div>';
     }
