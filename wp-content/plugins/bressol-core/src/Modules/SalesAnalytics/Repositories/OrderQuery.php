@@ -33,7 +33,21 @@ final class OrderQuery
         $channel = isset($filters['channel']) ? (string) $filters['channel'] : 'all';
         $marketId = isset($filters['market_id']) ? (string) $filters['market_id'] : '';
 
-        $metaQuery = [];
+        $metaQuery = [
+            'relation' => 'AND',
+            [
+                'relation' => 'OR',
+                [
+                    'key' => '_bressol_internal_order',
+                    'compare' => 'NOT EXISTS',
+                ],
+                [
+                    'key' => '_bressol_internal_order',
+                    'value' => '1',
+                    'compare' => '!=',
+                ],
+            ],
+        ];
         if ($channel === 'pos') {
             $metaQuery[] = [
                 'key' => '_bressol_pos_channel',
@@ -49,7 +63,7 @@ final class OrderQuery
             }
         } elseif ($channel === 'web') {
             // Web = pedidos sin meta POS o con valor distinto a "pos".
-            $metaQuery = [
+            $metaQuery[] = [
                 'relation' => 'OR',
                 [
                     'key' => '_bressol_pos_channel',
@@ -63,9 +77,7 @@ final class OrderQuery
             ];
         }
 
-        if ($metaQuery !== []) {
-            $args['meta_query'] = $metaQuery;
-        }
+        $args['meta_query'] = $metaQuery;
 
         $orders = wc_get_orders($args);
         $ids = [];
