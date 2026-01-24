@@ -18,6 +18,9 @@ if (!defined('ABSPATH')) {
 
 final class PosModule implements ModuleInterface
 {
+    private const CRON_HOOK = 'bressol_pos_cleanup_coupons';
+    private const DEFAULT_COUPON_RETENTION_DAYS = 90;
+
     /** @var string[] */
     private const PAGE_SLUGS = [
         'bressol-pos',
@@ -28,6 +31,8 @@ final class PosModule implements ModuleInterface
 
     public function register(): void
     {
+        add_action(self::CRON_HOOK, [$this, 'cleanup_pos_coupons']);
+
         if (!is_admin()) {
             return;
         }
@@ -406,6 +411,8 @@ final class PosModule implements ModuleInterface
             $coupon->add_meta_data('apply_before_tax', 'yes', true);
         }
         $coupon->add_meta_data('_bressol_pos_coupon', '1', true);
+        $coupon->add_meta_data('_bressol_pos_order_id', (string) $orderId, true);
+        $coupon->add_meta_data('_bressol_pos_created_at', (string) time(), true);
 
         $couponId = $coupon->save();
         if (!$couponId) {
@@ -413,5 +420,113 @@ final class PosModule implements ModuleInterface
         }
 
         return $coupon;
+    }
+
+    public static function schedule_cron(): void
+    {
+        if (!wp_next_scheduled(self::CRON_HOOK)) {
+            wp_schedule_event(time() + 300, 'daily', self::CRON_HOOK);
+        }
+    }
+
+    public static function clear_cron(): void
+    {
+        wp_clear_scheduled_hook(self::CRON_HOOK);
+    }
+
+    private function get_coupon_retention_days(): int
+    {
+        $days = self::DEFAULT_COUPON_RETENTION_DAYS;
+        if (defined('BRESSOL_POS_COUPON_RETENTION_DAYS')) {
+            $days = (int) BRESSOL_POS_COUPON_RETENTION_DAYS;
+        } else {
+            $days = (int) get_option('bressol_pos_coupon_retention_days', $days);
+        }
+
+        return max(1, $days);
+    }
+
+    public function cleanup_pos_coupons(): void
+    {
+        if (!class_exists('WooCommerce')) {
+            return;
+        }
+
+        if (!class_exists('WC_Coupon') || !function_exists('wc_get_order')) {
+            return;
+        }
+
+        $cutoffTimestamp = time() - ($this->get_coupon_retention_days() * DAY_IN_SECONDS);
+        $auditLogger = class_exists(AuditLogger::class) ? new AuditLogger() : null;
+
+        $paged = 1;
+        do {
+            $query = new \WP_Query([
+                'post_type' => 'shop_coupon',
+                'post_status' => 'publish',
+                'posts_per_page' => 100,
+                'paged' => $paged,
+                'fields' => 'ids',
+                'meta_query' => [
+                    [
+                        'key' => '_bressol_pos_coupon',
+                        'value' => '1',
+                    ],
+                    [
+                        'key' => '_bressol_pos_order_id',
+                        'compare' => 'EXISTS',
+                    ],
+                    [
+                        'key' => '_bressol_pos_created_at',
+                        'compare' => 'EXISTS',
+                    ],
+                ],
+            ]);
+
+            if (!$query->have_posts()) {
+                break;
+            }
+
+            foreach ($query->posts as $couponId) {
+                $couponId = (int) $couponId;
+                $coupon = new \WC_Coupon($couponId);
+                $code = (string) $coupon->get_code();
+                if ($code === '' || strpos($code, 'pos-redeem-') !== 0) {
+                    continue;
+                }
+
+                if ((int) $coupon->get_usage_count() < 1) {
+                    continue;
+                }
+
+                $createdAt = (int) get_post_meta($couponId, '_bressol_pos_created_at', true);
+                if ($createdAt <= 0 || $createdAt > $cutoffTimestamp) {
+                    continue;
+                }
+
+                $orderId = (int) get_post_meta($couponId, '_bressol_pos_order_id', true);
+                if ($orderId <= 0) {
+                    continue;
+                }
+
+                $order = wc_get_order($orderId);
+                if (!$order || $order->get_status() !== 'completed') {
+                    continue;
+                }
+
+                wp_delete_post($couponId, true);
+
+                if ($auditLogger instanceof AuditLogger) {
+                    $deletedAt = current_time('mysql');
+                    $auditLogger->log('pos_coupon_deleted', 'coupon', $couponId, null, [
+                        'order_id' => $orderId,
+                        'created_at' => $createdAt,
+                        'deleted_at' => $deletedAt,
+                    ]);
+                }
+            }
+
+            $paged++;
+        } while ($paged <= $query->max_num_pages);
     }
 }
