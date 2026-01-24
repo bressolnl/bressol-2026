@@ -37,5 +37,6 @@ final class Plugin
         $this->modules[] = new \Bressol\Modules\Crm\CrmModule();
         $this->modules[] = new \Bressol\Modules\Pos\PosModule();
         $this->modules[] = new \Bressol\Modules\SalesAnalytics\SalesAnalyticsModule();
+        $this->modules[] = new \Bressol\Modules\MarketsEvents\MarketsEventsModule();
     }
 }

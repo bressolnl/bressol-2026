@@ -31,6 +31,7 @@ Arbol de conocimiento
 - `docs/brain/modules/16-esp.md`
 - `docs/brain/modules/17-pos.md`
 - `docs/brain/modules/18-sales-analytics.md`
+- `docs/brain/modules/19-markets-events-calendar.md`
 
 5) Theme
 - `docs/brain/theme/00-bressol-theme.md`
