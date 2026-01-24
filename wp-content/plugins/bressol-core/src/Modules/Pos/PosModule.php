@@ -8,8 +8,16 @@ use Bressol\Modules\Crm\Services\AuditLogger;
 use Bressol\Modules\Crm\Services\CustomerService;
 use Bressol\Modules\Crm\Services\PointsService;
 use Bressol\Modules\Crm\Services\Settings as CrmSettings;
+use Bressol\Modules\MarketsEvents\Services\MarketsEventsPosMarketProvider;
+use Bressol\Modules\MarketsEvents\Services\PosEventContextService;
+use Bressol\Modules\Pos\Installer;
 use Bressol\Modules\Pos\Admin\AdminPages;
 use Bressol\Modules\Pos\Services\CustomerLookupService;
+use Bressol\Modules\Pos\Services\InternalOrderService;
+use Bressol\Modules\Pos\Services\InternalOrderStatus;
+use Bressol\Modules\Pos\Services\OpenedItemsService;
+use Bressol\Modules\Pos\Services\PosMarketsCatalog;
+use Bressol\Modules\Pos\Services\PosMarketResolver;
 use Bressol\Modules\Pos\Services\PosSettings;
 
 if (!defined('ABSPATH')) {
@@ -32,6 +40,12 @@ final class PosModule implements ModuleInterface
     public function register(): void
     {
         add_action(self::CRON_HOOK, [$this, 'cleanup_pos_coupons']);
+        (new InternalOrderStatus())->register();
+        add_action('admin_init', [Installer::class, 'maybe_upgrade']);
+
+        if (defined('WP_CLI') && WP_CLI) {
+            Installer::maybe_upgrade();
+        }
 
         if (!is_admin()) {
             return;
@@ -48,6 +62,9 @@ final class PosModule implements ModuleInterface
         add_action('wp_ajax_bressol_pos_find_customer', [$this, 'handleFindCustomerAjax']);
         add_action('wp_ajax_bressol_pos_search_products', [$this, 'handleSearchProductsAjax']);
         add_action('wp_ajax_bressol_pos_create_order', [$this, 'handleCreateOrderAjax']);
+        add_action('wp_ajax_bressol_pos_open_sampling_item', [$this, 'handleOpenSamplingItemAjax']);
+        add_action('wp_ajax_bressol_pos_list_opened_items', [$this, 'handleListOpenedItemsAjax']);
+        add_action('wp_ajax_bressol_pos_discard_opened_items', [$this, 'handleDiscardOpenedItemsAjax']);
     }
 
     public function enqueueAdminAssets(string $hook): void
@@ -70,25 +87,25 @@ final class PosModule implements ModuleInterface
         wp_enqueue_style('bressol-pos-admin', $styleSrc, [], '0.1.0');
 
         $settings = new PosSettings();
-        $markets = array_values(array_filter($settings->get_markets(), static function (array $market): bool {
-            return !empty($market['active']);
-        }));
+        $marketsProvider = new MarketsEventsPosMarketProvider();
+        $marketsCatalog = new PosMarketsCatalog($marketsProvider, $settings);
+        $markets = $marketsCatalog->list();
+        $activeEventId = (new PosEventContextService())->get_active_event_id(get_current_user_id());
 
         wp_localize_script('bressol-pos-admin', 'bressolPos', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'findCustomerNonce' => wp_create_nonce('bressol_pos_find_customer'),
             'searchProductsNonce' => wp_create_nonce('bressol_pos_search_products'),
             'createOrderNonce' => wp_create_nonce('bressol_pos_create_order'),
+            'openSamplingNonce' => wp_create_nonce('bressol_pos_open_sampling_item'),
+            'openSamplingAction' => 'bressol_pos_open_sampling_item',
+            'listOpenedItemsNonce' => wp_create_nonce('bressol_pos_list_opened_items'),
+            'discardOpenedItemsNonce' => wp_create_nonce('bressol_pos_discard_opened_items'),
             'pointsValueCents' => $settings->get_points_value_cents(),
             'minRedemptionPoints' => $settings->get_min_redemption_points(),
             'maxRedemptionPercent' => $settings->get_max_redemption_percent_of_order(),
-            'markets' => array_map(static function (array $market): array {
-                return [
-                    'id' => (string) ($market['id'] ?? ''),
-                    'name' => (string) ($market['name'] ?? ''),
-                    'default_cost_cents' => (int) ($market['default_cost_cents'] ?? 0),
-                ];
-            }, $markets),
+            'markets' => $markets,
+            'activeEventId' => $activeEventId,
         ]);
     }
 
@@ -184,7 +201,6 @@ final class PosModule implements ModuleInterface
         $settings = new PosSettings();
         $auditLogger = class_exists(AuditLogger::class) ? new AuditLogger() : null;
         $marketId = isset($_POST['market_id']) ? sanitize_text_field(wp_unslash($_POST['market_id'])) : '';
-        $marketCostCents = isset($_POST['market_cost_cents']) ? (int) wp_unslash($_POST['market_cost_cents']) : 0;
         $customerId = isset($_POST['customer_id']) ? absint($_POST['customer_id']) : 0;
         $itemsRaw = isset($_POST['items']) ? wp_unslash($_POST['items']) : '[]';
         $items = json_decode((string) $itemsRaw, true);
@@ -196,16 +212,16 @@ final class PosModule implements ModuleInterface
             $this->send_pos_error('pos_invalid_market', 'Mercado obligatorio.', 422);
         }
 
-        $activeMarket = null;
-        foreach ($settings->get_markets() as $market) {
-            if (!empty($market['active']) && (string) ($market['id'] ?? '') === $marketId) {
-                $activeMarket = $market;
-                break;
-            }
-        }
-        if ($activeMarket === null) {
+        $resolver = new PosMarketResolver($settings);
+        try {
+            $resolvedMarket = $resolver->resolve($marketId);
+        } catch (\Throwable $exception) {
             $this->send_pos_error('pos_invalid_market', 'Mercado inválido o inactivo.', 422);
         }
+
+        $marketId = $resolvedMarket['market_id'];
+        $marketName = $resolvedMarket['market_name'];
+        $eventId = $resolvedMarket['event_id'];
 
         if (!is_array($items) || $items === []) {
             $this->send_pos_error('pos_invalid_items', 'Carrito vacío.', 422);
@@ -267,7 +283,7 @@ final class PosModule implements ModuleInterface
                 $this->send_pos_error('pos_invalid_redemption', 'Canje inválido.', 422);
             }
 
-            $orderBaseCents = $itemsTotalCents + max(0, $marketCostCents);
+            $orderBaseCents = $itemsTotalCents;
             if ($orderBaseCents <= 0) {
                 $this->send_pos_error('pos_invalid_total', 'Total inválido para canje.', 422);
             }
@@ -311,8 +327,9 @@ final class PosModule implements ModuleInterface
 
         $order->update_meta_data('_bressol_pos_channel', 'pos');
         $order->update_meta_data('_bressol_pos_market_id', $marketId);
-        $order->update_meta_data('_bressol_pos_market_name', (string) ($activeMarket['name'] ?? ''));
-        $order->update_meta_data('_bressol_pos_market_cost_cents', max(0, $marketCostCents));
+        $order->update_meta_data('_bressol_pos_market_name', $marketName);
+        $order->update_meta_data('_bressol_pos_market_cost_cents', 0);
+        $order->update_meta_data('_bressol_event_id', $eventId);
         $order->update_meta_data('_bressol_pos_operator_id', get_current_user_id());
         if ($crmCustomerId !== null) {
             $order->update_meta_data('_bressol_pos_customer_id', $crmCustomerId);
@@ -359,6 +376,180 @@ final class PosModule implements ModuleInterface
 
         wp_send_json_success([
             'order_id' => $order->get_id(),
+        ]);
+    }
+
+    public function handleOpenSamplingItemAjax(): void
+    {
+        if (!current_user_can($this->get_capability())) {
+            $this->send_pos_error('pos_forbidden', 'No autorizado.', 403);
+        }
+
+        check_ajax_referer('bressol_pos_open_sampling_item', 'nonce');
+        $this->rate_limit_or_fail('open_sampling_item', 20, 20);
+
+        if (!function_exists('wc_create_order')) {
+            $this->send_pos_error('pos_wc_missing', 'WooCommerce no disponible.', 400);
+        }
+
+        $marketId = isset($_POST['market_id']) ? sanitize_text_field(wp_unslash($_POST['market_id'])) : '';
+        $eventId = isset($_POST['event_id']) ? absint($_POST['event_id']) : 0;
+        $productId = isset($_POST['product_id']) ? absint($_POST['product_id']) : 0;
+        $qty = isset($_POST['qty']) ? absint($_POST['qty']) : 0;
+
+        $resolver = new PosMarketResolver(new PosSettings());
+        try {
+            if ($marketId !== '') {
+                $resolved = $resolver->resolve($marketId);
+                $eventId = (int) $resolved['event_id'];
+            } elseif ($eventId > 0) {
+                $resolved = $resolver->resolve('event:' . $eventId);
+                $eventId = (int) $resolved['event_id'];
+            } else {
+                $this->send_pos_error('pos_invalid_event', 'Evento inválido.', 422);
+            }
+        } catch (\Throwable $exception) {
+            $this->send_pos_error('pos_invalid_event', 'Evento inválido.', 422);
+        }
+
+        $service = new InternalOrderService();
+        try {
+            $orderId = $service->create_sampling_open_order($eventId, get_current_user_id(), [[
+                'product_id' => $productId,
+                'qty' => $qty,
+            ]]);
+        } catch (\Throwable $exception) {
+            $this->send_pos_error('pos_internal_order_failed', $exception->getMessage(), 422);
+        }
+
+        $openedItemsService = new OpenedItemsService();
+        try {
+            $openedItemId = $openedItemsService->create_opened_item(
+                $eventId,
+                $productId,
+                get_current_user_id(),
+                $qty,
+                $orderId
+            );
+        } catch (\Throwable $exception) {
+            // Compensation: mark the internal order as invalid and avoid stock reduction.
+            $service->mark_internal_invalid($orderId);
+            $this->send_pos_error('pos_opened_item_failed', $exception->getMessage(), 422);
+        }
+
+        $order = wc_get_order($orderId);
+        if (!$order instanceof \WC_Order) {
+            $service->mark_internal_invalid($orderId);
+            $this->send_pos_error('pos_opened_item_failed', 'Pedido interno no disponible.', 422);
+        }
+
+        $matched = false;
+        foreach ($order->get_items() as $item) {
+            if ((int) $item->get_product_id() === $productId) {
+                $item->update_meta_data('_bressol_opened_item_id', $openedItemId);
+                $item->save();
+                $matched = true;
+                break;
+            }
+        }
+
+        if (!$matched) {
+            // Compensation: keep the order but mark it invalid for manual review.
+            $service->mark_internal_invalid($orderId);
+            $this->send_pos_error('pos_opened_item_failed', 'No se pudo vincular el item abierto.', 422);
+        }
+
+        try {
+            $service->reduce_stock_once($orderId);
+        } catch (\Throwable $exception) {
+            $service->mark_internal_invalid($orderId);
+            $this->send_pos_error('pos_stock_failed', $exception->getMessage(), 422);
+        }
+
+        wp_send_json_success([
+            'order_id' => $orderId,
+            'opened_item_id' => $openedItemId,
+            'stock_reduced' => true,
+        ]);
+    }
+
+    public function handleListOpenedItemsAjax(): void
+    {
+        if (!current_user_can($this->get_capability())) {
+            $this->send_pos_error('pos_forbidden', 'No autorizado.', 403);
+        }
+
+        check_ajax_referer('bressol_pos_list_opened_items', 'nonce');
+        $this->rate_limit_or_fail('list_opened_items', 30, 20);
+
+        $limit = isset($_POST['limit']) ? absint($_POST['limit']) : 50;
+        $page = isset($_POST['page']) ? absint($_POST['page']) : 1;
+
+        $service = new OpenedItemsService();
+        $items = $service->list_open_items($limit, $page);
+
+        $payload = [];
+        foreach ($items as $item) {
+            $productId = (int) ($item['product_id'] ?? 0);
+            $productName = '';
+            if ($productId > 0 && function_exists('wc_get_product')) {
+                $product = wc_get_product($productId);
+                if ($product instanceof \WC_Product) {
+                    $productName = $product->get_name();
+                }
+            }
+
+            $payload[] = [
+                'id' => (int) ($item['id'] ?? 0),
+                'product_id' => $productId,
+                'product_name' => $productName,
+                'opened_at' => (string) ($item['opened_at'] ?? ''),
+                'opened_event_id' => (int) ($item['opened_event_id'] ?? 0),
+                'opened_by_user_id' => (int) ($item['opened_by_user_id'] ?? 0),
+                'initial_qty' => (int) ($item['initial_qty'] ?? 0),
+                'internal_order_id' => (int) ($item['internal_order_id'] ?? 0),
+                'status' => (string) ($item['status'] ?? ''),
+            ];
+        }
+
+        wp_send_json_success([
+            'items' => $payload,
+        ]);
+    }
+
+    public function handleDiscardOpenedItemsAjax(): void
+    {
+        if (!current_user_can($this->get_capability())) {
+            $this->send_pos_error('pos_forbidden', 'No autorizado.', 403);
+        }
+
+        check_ajax_referer('bressol_pos_discard_opened_items', 'nonce');
+        $this->rate_limit_or_fail('discard_opened_items', 20, 20);
+
+        $idsRaw = isset($_POST['opened_item_ids']) ? wp_unslash($_POST['opened_item_ids']) : null;
+        $singleId = isset($_POST['opened_item_id']) ? absint($_POST['opened_item_id']) : 0;
+        $reason = isset($_POST['reason']) ? sanitize_text_field(wp_unslash($_POST['reason'])) : '';
+
+        $ids = [];
+        if (is_string($idsRaw) && $idsRaw !== '') {
+            $decoded = json_decode($idsRaw, true);
+            if (is_array($decoded)) {
+                $ids = array_map('intval', $decoded);
+            }
+        }
+        if ($ids === [] && $singleId > 0) {
+            $ids = [$singleId];
+        }
+
+        $service = new OpenedItemsService();
+        try {
+            $updated = $service->discard_opened_items($ids, $reason);
+        } catch (\Throwable $exception) {
+            $this->send_pos_error('pos_discard_failed', $exception->getMessage(), 422);
+        }
+
+        wp_send_json_success([
+            'discarded' => $updated,
         ]);
     }
 
