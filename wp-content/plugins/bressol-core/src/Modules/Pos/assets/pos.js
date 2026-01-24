@@ -11,11 +11,12 @@
     customer: null,
     cart: [],
     orderTotalCents: 0,
+    samplingProduct: null,
   };
 
   const elements = {
     marketSelect: document.querySelector('[data-pos-market-select]'),
-    marketCost: document.querySelector('[data-pos-market-cost]'),
+    activeEvent: document.querySelector('[data-pos-active-event]'),
     customerToken: document.querySelector('[data-pos-customer-token]'),
     customerSearch: document.querySelector('[data-pos-customer-search]'),
     customerClear: document.querySelector('[data-pos-customer-clear]'),
@@ -24,6 +25,13 @@
     productQuery: document.querySelector('[data-pos-product-query]'),
     productSearch: document.querySelector('[data-pos-product-search]'),
     productResults: document.querySelector('[data-pos-product-results]'),
+    samplingQuery: document.querySelector('[data-pos-sampling-query]'),
+    samplingSearch: document.querySelector('[data-pos-sampling-search]'),
+    samplingResults: document.querySelector('[data-pos-sampling-results]'),
+    samplingSelected: document.querySelector('[data-pos-sampling-selected]'),
+    samplingQty: document.querySelector('[data-pos-sampling-qty]'),
+    samplingOpen: document.querySelector('[data-pos-sampling-open]'),
+    samplingFeedback: document.querySelector('[data-pos-sampling-feedback]'),
     cartBody: document.querySelector('[data-pos-cart-body]'),
     cartTotal: document.querySelector('[data-pos-cart-total]'),
     redemptionTotal: document.querySelector('[data-pos-redemption-total]'),
@@ -50,6 +58,14 @@
     elements.feedback.dataset.type = type;
   };
 
+  const setSamplingFeedback = (message, type = 'info') => {
+    if (!elements.samplingFeedback) {
+      return;
+    }
+    elements.samplingFeedback.textContent = message;
+    elements.samplingFeedback.dataset.type = type;
+  };
+
   const getMarket = () => {
     const id = elements.marketSelect ? elements.marketSelect.value : '';
     return state.markets.find((market) => market.id === id) || null;
@@ -66,15 +82,6 @@
     }
     elements.customerSummary.textContent = `${state.customer.display_name} · ${state.customer.masked_public_id}`;
     updateRedemptionAvailability();
-  };
-
-  const parseEurosToCents = (value) => {
-    const normalized = String(value || '').replace(',', '.');
-    const float = parseFloat(normalized);
-    if (Number.isNaN(float)) {
-      return 0;
-    }
-    return Math.max(0, Math.round(float * 100));
   };
 
   const updateCart = () => {
@@ -95,13 +102,9 @@
       elements.cartBody.appendChild(row);
     });
 
-    const marketCost = elements.marketCost
-      ? parseEurosToCents(elements.marketCost.value)
-      : 0;
-    const total = subtotal + marketCost;
-    state.orderTotalCents = total;
+    state.orderTotalCents = subtotal;
     if (!elements.pointsRedeem && elements.cartTotal) {
-      elements.cartTotal.textContent = `${formatEuros(total)} €`;
+      elements.cartTotal.textContent = `${formatEuros(subtotal)} €`;
     }
     updateRedemptionPreview();
   };
@@ -225,6 +228,53 @@
     );
   };
 
+  const renderSamplingProducts = (products) => {
+    if (!elements.samplingResults) {
+      return;
+    }
+    elements.samplingResults.innerHTML = '';
+    if (!products.length) {
+      elements.samplingResults.textContent = 'No hay resultados.';
+      return;
+    }
+
+    products.forEach((product) => {
+      const row = document.createElement('div');
+      row.className = 'bressol-pos__result';
+      row.innerHTML = `
+        <div>
+          <strong>${product.name}</strong>
+          <div class="bressol-pos__muted">${product.sku || ''}</div>
+        </div>
+        <div>
+          <span>${formatEuros(product.price_cents)} €</span>
+          <button type="button" data-pos-sampling-select="${product.id}" class="button">Seleccionar</button>
+        </div>
+      `;
+      elements.samplingResults.appendChild(row);
+    });
+
+    elements.samplingResults.addEventListener(
+      'click',
+      (event) => {
+        const target = event.target;
+        if (!target || !target.dataset.posSamplingSelect) {
+          return;
+        }
+        const productId = parseInt(target.dataset.posSamplingSelect, 10);
+        const product = products.find((item) => item.id === productId);
+        if (!product) {
+          return;
+        }
+        state.samplingProduct = product;
+        if (elements.samplingSelected) {
+          elements.samplingSelected.textContent = `Seleccionado: ${product.name}`;
+        }
+      },
+      { once: true }
+    );
+  };
+
   const searchProducts = async () => {
     const query = elements.productQuery ? elements.productQuery.value.trim() : '';
     if (!query) {
@@ -250,6 +300,33 @@
     }
     setFeedback('');
     renderProducts(data.data || []);
+  };
+
+  const searchSamplingProducts = async () => {
+    const query = elements.samplingQuery ? elements.samplingQuery.value.trim() : '';
+    if (!query) {
+      setSamplingFeedback('Escribe un producto o SKU.', 'error');
+      return;
+    }
+
+    setSamplingFeedback('Buscando productos…');
+    const form = new FormData();
+    form.append('action', 'bressol_pos_search_products');
+    form.append('nonce', window.bressolPos.searchProductsNonce);
+    form.append('query', query);
+
+    const response = await fetch(window.bressolPos.ajaxUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: form,
+    });
+    const data = await response.json();
+    if (!data || !data.success) {
+      setSamplingFeedback(data?.data?.message || 'No se pudo buscar.', 'error');
+      return;
+    }
+    setSamplingFeedback('');
+    renderSamplingProducts(data.data || []);
   };
 
   const lookupCustomer = async () => {
@@ -298,10 +375,6 @@
       return;
     }
 
-    const marketCost = elements.marketCost
-      ? parseEurosToCents(elements.marketCost.value)
-      : 0;
-
     const items = state.cart.map((item) => ({
       product_id: item.product_id,
       qty: item.qty,
@@ -315,7 +388,6 @@
     form.append('action', 'bressol_pos_create_order');
     form.append('nonce', window.bressolPos.createOrderNonce);
     form.append('market_id', market.id);
-    form.append('market_cost_cents', String(marketCost));
     form.append('customer_id', state.customer ? String(state.customer.customer_id) : '');
     form.append('loyalty_opt_in', elements.loyaltyOpt && elements.loyaltyOpt.checked ? 'yes' : 'no');
     form.append('marketing_opt_in', elements.marketingOpt && elements.marketingOpt.checked ? 'yes' : 'no');
@@ -337,28 +409,116 @@
     updateCart();
   };
 
+  const openSamplingItem = async ({ eventId = 0, marketId = '', productId = 0, qty = 0 } = {}) => {
+    const numericProductId = parseInt(productId || 0, 10);
+    const numericQty = parseInt(qty || 0, 10);
+    const numericEventId = parseInt(eventId || 0, 10);
+    const action = window.bressolPos.openSamplingAction || 'bressol_pos_open_sampling_item';
+
+    if (numericProductId <= 0 || numericQty <= 0) {
+      throw new Error('Producto o cantidad inválida.');
+    }
+
+    if (numericEventId <= 0 && !marketId) {
+      throw new Error('Evento o mercado requerido.');
+    }
+
+    const form = new FormData();
+    form.append('action', action);
+    form.append('nonce', window.bressolPos.openSamplingNonce);
+    if (marketId) {
+      form.append('market_id', String(marketId));
+    } else {
+      form.append('event_id', String(numericEventId));
+    }
+    form.append('product_id', String(numericProductId));
+    form.append('qty', String(numericQty));
+
+    const response = await fetch(window.bressolPos.ajaxUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: form,
+    });
+    const data = await response.json();
+    if (!data || !data.success) {
+      throw new Error(data?.data?.message || 'No se pudo abrir el sampling.');
+    }
+    return data.data;
+  };
+
+  const handleOpenSampling = async () => {
+    const market = getMarket();
+    if (!market) {
+      setSamplingFeedback('Selecciona un mercado.', 'error');
+      return;
+    }
+    if (!state.samplingProduct) {
+      setSamplingFeedback('Selecciona un producto.', 'error');
+      return;
+    }
+    const qty = elements.samplingQty ? parseInt(elements.samplingQty.value || '0', 10) : 0;
+    if (qty <= 0) {
+      setSamplingFeedback('Cantidad inválida.', 'error');
+      return;
+    }
+
+    setSamplingFeedback('Abriendo sampling…');
+    try {
+      const result = await openSamplingItem({
+        marketId: market.id,
+        productId: state.samplingProduct.id,
+        qty,
+      });
+      setSamplingFeedback(`Sampling abierto (#${result.order_id}).`, 'success');
+    } catch (error) {
+      setSamplingFeedback(error?.message || 'No se pudo abrir el sampling.', 'error');
+    }
+  };
+
   const initMarkets = () => {
     if (!elements.marketSelect) {
       return;
     }
-    state.markets.forEach((market) => {
+    const markets = Array.isArray(state.markets) ? state.markets : [];
+    markets.forEach((market) => {
       const option = document.createElement('option');
       option.value = market.id;
       option.textContent = market.name;
       elements.marketSelect.appendChild(option);
     });
 
+    const activeEventId = parseInt(window.bressolPos.activeEventId || '0', 10);
+    if (activeEventId > 0 && elements.marketSelect.options.length > 0) {
+      const activeValue = `event:${activeEventId}`;
+      const exists = markets.some((market) => market.id === activeValue);
+      if (exists) {
+        elements.marketSelect.value = activeValue;
+        elements.marketSelect.dispatchEvent(new Event('change'));
+      }
+    }
+
+    if (elements.activeEvent) {
+      if (activeEventId > 0) {
+        const activeMarket = markets.find((market) => market.id === `event:${activeEventId}`);
+        const activeName = activeMarket ? activeMarket.name : `event:${activeEventId}`;
+        elements.activeEvent.textContent = `Evento activo: ${activeName}`;
+      } else {
+        elements.activeEvent.textContent = 'Evento activo: sin selección';
+      }
+    }
+
     elements.marketSelect.addEventListener('change', () => {
       const market = getMarket();
-      if (market && elements.marketCost) {
-        elements.marketCost.value = formatEuros(market.default_cost_cents || 0);
-      }
+      void market;
     });
   };
 
   const bindEvents = () => {
     if (elements.productSearch) {
       elements.productSearch.addEventListener('click', searchProducts);
+    }
+    if (elements.samplingSearch) {
+      elements.samplingSearch.addEventListener('click', searchSamplingProducts);
     }
     if (elements.customerSearch) {
       elements.customerSearch.addEventListener('click', lookupCustomer);
@@ -376,10 +536,15 @@
     if (elements.createOrder) {
       elements.createOrder.addEventListener('click', createOrder);
     }
+    if (elements.samplingOpen) {
+      elements.samplingOpen.addEventListener('click', handleOpenSampling);
+    }
     if (elements.pointsRedeem) {
       elements.pointsRedeem.addEventListener('input', updateRedemptionPreview);
     }
   };
+
+  window.bressolPos.openSamplingItem = openSamplingItem;
 
   initMarkets();
   attachCartHandlers();
