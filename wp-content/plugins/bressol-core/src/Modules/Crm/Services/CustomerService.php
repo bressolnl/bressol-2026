@@ -556,6 +556,136 @@ final class CustomerService
         return $response;
     }
 
+    /** @param array<string, mixed> $payload
+     *  @return array<string, mixed>
+     */
+    public function create_from_pos(array $payload): array
+    {
+        $firstName = isset($payload['first_name']) ? sanitize_text_field((string) $payload['first_name']) : '';
+        if ($firstName === '') {
+            return [
+                'ok' => false,
+                'code' => 'customer_name_required',
+                'error' => 'Nombre obligatorio.',
+            ];
+        }
+
+        $customerType = isset($payload['customer_type']) ? sanitize_text_field((string) $payload['customer_type']) : 'b2c';
+        if (!in_array($customerType, ['b2c', 'b2b'], true)) {
+            $customerType = 'b2c';
+        }
+
+        $email = isset($payload['email']) ? sanitize_email((string) $payload['email']) : '';
+        if ($email !== '' && !is_email($email)) {
+            return [
+                'ok' => false,
+                'code' => 'customer_email_invalid',
+                'error' => 'Email inválido.',
+            ];
+        }
+
+        $warning = null;
+        $warningCode = null;
+        $espStatus = $email !== '' ? $this->get_esp_consent_status($email) : null;
+
+        $canReceiveMarketing = !empty($payload['can_receive_marketing']) ? 1 : 0;
+        if ($email === '') {
+            $canReceiveMarketing = 0;
+            $warning = 'Sin email: marketing desactivado.';
+            $warningCode = 'customer_marketing_forced_off';
+        } elseif ($espStatus === 'opt_out') {
+            $canReceiveMarketing = 0;
+            $warning = 'El cliente tiene opt-out en ESP. Marketing desactivado.';
+            $warningCode = 'customer_marketing_forced_off';
+        }
+
+        $loyaltyEnabled = $this->loyalty_column_exists()
+            ? (int) (bool) ($payload['loyalty_enabled'] ?? 0)
+            : null;
+
+        if ($email !== '' && $this->get_customer_by_email_type($email, $customerType)) {
+            return [
+                'ok' => false,
+                'code' => 'customer_duplicate',
+                'error' => 'Ya existe un cliente con ese email y tipo.',
+            ];
+        }
+
+        if ($email === '') {
+            $email = $this->generate_placeholder_email($customerType);
+        }
+
+        $now = current_time('mysql');
+        $data = [
+            'email' => $email,
+            'customer_type' => $customerType,
+            'first_name' => $firstName,
+            'last_name' => isset($payload['last_name']) ? sanitize_text_field((string) $payload['last_name']) : null,
+            'phone' => isset($payload['phone']) ? sanitize_text_field((string) $payload['phone']) : null,
+            'company' => null,
+            'business_type' => null,
+            'can_be_profiled' => 1,
+            'can_receive_marketing' => $canReceiveMarketing,
+            'loyalty_enabled' => $loyaltyEnabled,
+            'status' => 'active',
+            'source' => 'pos',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ];
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_crm_customers';
+
+        $inserted = $wpdb->insert($table, $this->filter_null_values($data));
+        if (!$inserted) {
+            return [
+                'ok' => false,
+                'code' => 'customer_create_failed',
+                'error' => 'No se pudo crear el cliente.',
+            ];
+        }
+
+        $customerId = (int) $wpdb->insert_id;
+
+        $this->auditLogger->log('customer_created', 'customer', $customerId, get_current_user_id(), [
+            'source' => 'pos',
+            'customer_type' => $customerType,
+        ]);
+
+        if ($canReceiveMarketing === 1 && $espStatus !== 'opt_out') {
+            $this->maybe_update_esp_consent($email, 1, 'pos', null);
+            $this->auditLogger->log('customer_marketing_opt_in', 'customer', $customerId, get_current_user_id(), [
+                'source' => 'pos',
+            ]);
+        } elseif ($canReceiveMarketing === 0) {
+            $this->auditLogger->log('customer_marketing_opt_out', 'customer', $customerId, get_current_user_id(), [
+                'source' => 'pos',
+            ]);
+        }
+
+        if ($loyaltyEnabled === 1) {
+            $this->auditLogger->log('customer_loyalty_enabled', 'customer', $customerId, get_current_user_id(), [
+                'source' => 'pos',
+            ]);
+        } elseif ($loyaltyEnabled === 0) {
+            $this->auditLogger->log('customer_loyalty_disabled', 'customer', $customerId, get_current_user_id(), [
+                'source' => 'pos',
+            ]);
+        }
+
+        $response = [
+            'ok' => true,
+            'customer_id' => $customerId,
+        ];
+
+        if ($warning !== null) {
+            $response['warning'] = $warning;
+            $response['warning_code'] = $warningCode;
+        }
+
+        return $response;
+    }
+
     public function anonymize_customer(int $customerId): bool
     {
         $current = $this->get_customer($customerId);
@@ -1065,6 +1195,22 @@ final class CustomerService
         );
 
         return $customer ?: null;
+    }
+
+    private function generate_placeholder_email(string $customerType): string
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $seed = function_exists('wp_generate_password')
+                ? wp_generate_password(12, false, false)
+                : bin2hex(random_bytes(6));
+            $email = 'pos+' . strtolower($seed) . '@example.invalid';
+
+            if (!$this->get_customer_by_email_type($email, $customerType)) {
+                return $email;
+            }
+        }
+
+        return 'pos+' . uniqid('', true) . '@example.invalid';
     }
 
     private function loyalty_column_exists(): bool

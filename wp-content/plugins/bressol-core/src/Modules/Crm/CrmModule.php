@@ -119,7 +119,12 @@ final class CrmModule implements ModuleInterface
         $settings = new Settings();
         $pointsService = new PointsService($settings, $auditLogger);
 
-        $customerId = $customerService->upsert_from_order($order);
+        $isPosOrder = $this->is_pos_order($order);
+        $posCustomerId = $isPosOrder ? $this->get_pos_customer_id($order) : 0;
+
+        $customerId = $posCustomerId > 0
+            ? $posCustomerId
+            : $customerService->upsert_from_order($order);
         if (!$customerId) {
             return;
         }
@@ -134,7 +139,49 @@ final class CrmModule implements ModuleInterface
         $customerService->apply_marketing_opt_in_from_order($customerId, $order);
         if ($customerService->is_loyalty_enabled($customerId)) {
             $pointsService->award_points_for_order($customerId, $order, $customerService->get_customer_type($customerId));
+            return;
         }
+
+        if ($isPosOrder && (string) $customer->status === 'active' && !$this->has_loyalty_opt_in($order)) {
+            $auditLogger->log('points_skipped_not_enrolled', 'order', $orderId, null, [
+                'source' => 'pos',
+                'order_id' => $orderId,
+                'customer_id' => $customerId,
+            ]);
+        }
+    }
+
+    private function is_pos_order(object $order): bool
+    {
+        if (!method_exists($order, 'get_meta')) {
+            return false;
+        }
+
+        return (string) $order->get_meta('_bressol_pos_channel') === 'pos';
+    }
+
+    private function get_pos_customer_id(object $order): int
+    {
+        if (!method_exists($order, 'get_meta')) {
+            return 0;
+        }
+
+        return (int) $order->get_meta('_bressol_pos_customer_id');
+    }
+
+    private function has_loyalty_opt_in(object $order): bool
+    {
+        if (!method_exists($order, 'get_meta')) {
+            return false;
+        }
+
+        $value = $order->get_meta('_bressol_loyalty_opt_in');
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $normalized = strtolower((string) $value);
+        return in_array($normalized, ['yes', '1', 'true'], true);
     }
 
     /** @param array<string, mixed> $fields */

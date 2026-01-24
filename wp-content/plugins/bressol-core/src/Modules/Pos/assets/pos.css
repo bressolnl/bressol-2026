@@ -1,0 +1,95 @@
+.bressol-pos__panel {
+  background: #fff;
+  border: 1px solid #dcdcde;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.bressol-pos__layout {
+  display: grid;
+  gap: 16px;
+}
+
+.bressol-pos__layout .bressol-pos__panel {
+  margin-top: 0;
+}
+
+.bressol-pos__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.bressol-pos__row input[type="text"],
+.bressol-pos__row input[type="number"],
+.bressol-pos__row input[type="email"],
+.bressol-pos__row select {
+  min-width: 220px;
+}
+
+.bressol-pos__results {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.bressol-pos__result {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid #dcdcde;
+  border-radius: 4px;
+  background: #f6f7f7;
+}
+
+.bressol-pos__cart input[type="number"] {
+  width: 80px;
+}
+
+.bressol-pos__total {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 16px;
+}
+
+.bressol-pos__total--secondary {
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.bressol-pos__muted {
+  color: #6c757d;
+  font-size: 12px;
+}
+
+.bressol-pos__feedback[data-type="error"] {
+  color: #b32d2e;
+}
+
+.bressol-pos__feedback[data-type="success"] {
+  color: #2e7d32;
+}
+
+.bressol-pos__feedback {
+  margin-left: 12px;
+}
+
+@media (min-width: 960px) {
+  .bressol-pos__layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bressol-pos__panel {
+    min-height: 220px;
+  }
+}
+
+.bressol-pos__code {
+  background: #f6f7f7;
+  border: 1px solid #dcdcde;
+  padding: 12px;
+  white-space: pre-wrap;
+}

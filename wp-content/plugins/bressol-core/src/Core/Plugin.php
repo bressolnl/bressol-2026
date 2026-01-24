@@ -35,5 +35,6 @@ final class Plugin
         $this->modules[] = new \Bressol\Modules\Taxonomies\TaxonomiesModule();
         $this->modules[] = new \Bressol\Modules\Esp\EspModule();
         $this->modules[] = new \Bressol\Modules\Crm\CrmModule();
+        $this->modules[] = new \Bressol\Modules\Pos\PosModule();
     }
 }
