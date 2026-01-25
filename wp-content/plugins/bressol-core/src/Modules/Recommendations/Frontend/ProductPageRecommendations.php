@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Bressol\Modules\Recommendations\Frontend;
 
+use Bressol\Modules\Inventory\Services\AuditLogger as InventoryAuditLogger;
+use Bressol\Modules\Inventory\Services\CacheService as InventoryCacheService;
+use Bressol\Modules\Inventory\Services\SellableService;
 use Bressol\Modules\Recommendations\Domain\RecommendationRules;
 
 if (!defined('ABSPATH')) {
@@ -24,6 +27,7 @@ final class ProductPageRecommendations
         if (!$product) return;
 
         $sourceProductId = (int) $product->get_id();
+        $inventoryService = SellableService::build_default(new InventoryCacheService(), new InventoryAuditLogger());
 
         $family  = RecommendationRules::detectFamily($sourceProductId);
         $slotKey = RecommendationRules::detectSlot($sourceProductId);
@@ -43,6 +47,9 @@ final class ProductPageRecommendations
 
             $p = wc_get_product($pid);
             if (!$p) continue;
+            if (!$inventoryService->is_sellable($pid, 1)) {
+                continue;
+            }
 
             $item['product'] = $p;
             $valid[] = $item;

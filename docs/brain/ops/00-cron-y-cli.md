@@ -18,6 +18,8 @@ Cron POS
 CLI (WP-CLI)
 - `wp bressol crm import-customers`
 - `wp bressol crm selftest`
+- `wp bressol seo-audit`
+- `wp bressol inventory selftest`
 
 Notas
 - En admin-ajax, `is_admin()` puede ser true; modulos con AJAX deben permitirlo.

@@ -10,6 +10,9 @@ use Bressol\Modules\Crm\Services\PointsService;
 use Bressol\Modules\Crm\Services\Settings as CrmSettings;
 use Bressol\Modules\MarketsEvents\Services\MarketsEventsPosMarketProvider;
 use Bressol\Modules\MarketsEvents\Services\PosEventContextService;
+use Bressol\Modules\Inventory\Services\AuditLogger as InventoryAuditLogger;
+use Bressol\Modules\Inventory\Services\CacheService as InventoryCacheService;
+use Bressol\Modules\Inventory\Services\SellableService;
 use Bressol\Modules\Pos\Installer;
 use Bressol\Modules\Pos\Admin\AdminPages;
 use Bressol\Modules\Pos\Services\CustomerLookupService;
@@ -227,6 +230,7 @@ final class PosModule implements ModuleInterface
             $this->send_pos_error('pos_invalid_items', 'Carrito vacío.', 422);
         }
 
+        $sellableService = SellableService::build_default(new InventoryCacheService(), new InventoryAuditLogger());
         $validatedItems = [];
         $itemsTotalCents = 0;
         foreach ($items as $item) {
@@ -241,6 +245,12 @@ final class PosModule implements ModuleInterface
             $product = wc_get_product($productId);
             if (!$product) {
                 continue;
+            }
+            if (!$sellableService->is_sellable($productId, $qty)) {
+                $name = $product->get_name();
+                $message = $name !== '' ? ('Stock insuficiente: ' . $name . '.') : 'Stock insuficiente.';
+                $sellableService->log_blocked('pos_create_order', $productId, $qty);
+                $this->send_pos_error('pos_stock_insufficient', $message, 422);
             }
             $priceCents = (int) round(((float) $product->get_price()) * 100);
             $itemsTotalCents += $priceCents * $qty;

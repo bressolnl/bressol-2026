@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Bressol\Modules\Recommendations\Frontend;
 
+use Bressol\Modules\Inventory\Services\AuditLogger as InventoryAuditLogger;
+use Bressol\Modules\Inventory\Services\CacheService as InventoryCacheService;
+use Bressol\Modules\Inventory\Services\SellableService;
 use Bressol\Modules\Recommendations\Domain\RecommendationRules;
 
 if (!defined('ABSPATH')) {
@@ -24,6 +27,7 @@ final class CartRecommendations
         $cartItems = WC()->cart->get_cart();
         if (empty($cartItems)) return;
 
+        $inventoryService = SellableService::build_default(new InventoryCacheService(), new InventoryAuditLogger());
         $inCart = [];
         $familiesInCart = [];
 
@@ -63,6 +67,9 @@ final class CartRecommendations
 
             $p = wc_get_product($pid);
             if (!$p) continue;
+            if (!$inventoryService->is_sellable($pid, 1)) {
+                continue;
+            }
 
             $rec['product'] = $p;
             $valid[] = $rec;

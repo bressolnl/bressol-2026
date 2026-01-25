@@ -31,7 +31,9 @@ Arbol de conocimiento
 - `docs/brain/modules/16-esp.md`
 - `docs/brain/modules/17-pos.md`
 - `docs/brain/modules/18-sales-analytics.md`
+- `docs/brain/modules/19-inventory.md`
 - `docs/brain/modules/19-markets-events-calendar.md`
+- `docs/brain/modules/20-seo-pdp.md`
 
 5) Theme
 - `docs/brain/theme/00-bressol-theme.md`
@@ -39,6 +41,7 @@ Arbol de conocimiento
 6) Operativa (cron, CLI, jobs)
 - `docs/brain/ops/00-cron-y-cli.md`
 - `docs/brain/ops/01-consent-cmp.md`
+- `docs/brain/ops/02-qa-canonical.md`
 
 Relacion con docs existentes
 - `docs/00-vision-and-principles.md` y `docs/10-architecture-bressol-core.md` son la base original.
