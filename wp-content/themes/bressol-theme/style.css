@@ -3,7 +3,473 @@ Theme Name: Bressol Theme
 Theme URI: https://bressol.nl
 Author: Bressol
 Author URI: https://bressol.nl
-Description: Tema propio Bressol 2026 (sin Elementor). UI/UX + plantillas + rendimiento + SEO.
+Description: Eigen Bressol-thema 2026 (zonder Elementor). UI/UX + templates + performance + SEO.
 Version: 0.1.0
 Text Domain: bressol-theme
 */
+
+:root {
+    --bressol-black: #070C0C;
+    --bressol-gold: #BCAF4A;
+    --bressol-white: #FFFFFF;
+    --bressol-gray-100: #F6F5F2;
+    --bressol-gray-200: #E8E4DC;
+    --bressol-text: var(--bressol-black);
+    --bressol-bg: var(--bressol-white);
+    --bressol-border: rgba(7, 12, 12, 0.12);
+    --bressol-border-soft: rgba(7, 12, 12, 0.08);
+    --bressol-shadow: rgba(7, 12, 12, 0.06);
+    --bressol-gold-soft: rgba(188, 175, 74, 0.14);
+    --bressol-texture-veil: rgba(7, 12, 12, 0.02);
+    --bressol-radius-xs: 4px;
+    --bressol-radius-sm: 8px;
+    --bressol-radius-md: 12px;
+    --bressol-radius-lg: 16px;
+    --bressol-shadow-xs: 0 6px 18px rgba(7, 12, 12, 0.06);
+    --bressol-shadow-sm: 0 10px 24px rgba(7, 12, 12, 0.08);
+    --bressol-space-xs: 6px;
+    --bressol-space-sm: 10px;
+    --bressol-space-md: 16px;
+    --bressol-space-lg: 24px;
+    --bressol-space-xl: 40px;
+    --bressol-font-size-xs: 0.85rem;
+    --bressol-font-size-sm: 0.95rem;
+    --bressol-font-size-md: 1rem;
+    --bressol-font-size-lg: 1.15rem;
+    --bressol-font-size-xl: 1.6rem;
+    --bressol-font-size-xxl: 2.4rem;
+    --bressol-font-body: "Montserrat", "Segoe UI", system-ui, sans-serif;
+    --bressol-font-heading: "Cinzel", "Times New Roman", serif;
+}
+
+body {
+    margin: 0;
+    font-family: var(--bressol-font-body);
+    line-height: 1.65;
+    color: var(--bressol-text);
+    background: var(--bressol-bg);
+}
+
+h1,
+h2,
+h3 {
+    font-family: var(--bressol-font-heading);
+    letter-spacing: 0.03em;
+    line-height: 1.15;
+    font-weight: 600;
+}
+
+h1 {
+    font-size: clamp(var(--bressol-font-size-xl), 3vw, var(--bressol-font-size-xxl));
+    margin: 0 0 var(--bressol-space-sm);
+}
+
+h2 {
+    font-size: clamp(var(--bressol-font-size-lg), 2.4vw, var(--bressol-font-size-xl));
+    margin: 0 0 var(--bressol-space-sm);
+}
+
+h3 {
+    font-size: var(--bressol-font-size-md);
+    margin: 0 0 var(--bressol-space-xs);
+}
+
+p {
+    margin: 0 0 var(--bressol-space-sm);
+}
+
+ul {
+    margin: 0 0 var(--bressol-space-sm);
+    padding-left: 20px;
+}
+
+strong {
+    font-weight: 600;
+}
+
+small {
+    font-size: var(--bressol-font-size-xs);
+}
+
+a {
+    color: inherit;
+}
+
+button {
+    font-family: inherit;
+}
+
+.bressol-main {
+    padding: var(--bressol-space-lg) var(--bressol-space-md) var(--bressol-space-xl);
+}
+
+.bressol-container {
+    max-width: 1120px;
+    margin: 0 auto;
+}
+
+.bressol-section {
+    margin-bottom: var(--bressol-space-xl);
+}
+
+.bressol-hero {
+    margin-bottom: var(--bressol-space-xl);
+}
+
+.bressol-hero__title {
+    margin-bottom: var(--bressol-space-sm);
+}
+
+.bressol-lead {
+    margin-top: var(--bressol-space-xs);
+    font-size: 1.05rem;
+}
+
+.bressol-site-header {
+    border-bottom: 1px solid var(--bressol-border-soft);
+    padding: var(--bressol-space-lg) 0;
+    background: var(--bressol-bg);
+}
+
+.bressol-site-header__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bressol-space-md);
+}
+
+.bressol-site-header__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--bressol-space-sm);
+}
+
+.bressol-brand {
+    text-decoration: none;
+    color: inherit;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.bressol-brand__name {
+    font-size: 1.1rem;
+}
+
+.bressol-nav {
+    font-size: var(--bressol-font-size-sm);
+}
+
+.bressol-nav__list {
+    display: flex;
+    gap: var(--bressol-space-md);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.bressol-nav__item {
+    display: flex;
+}
+
+.bressol-nav__link {
+    text-decoration: none;
+    position: relative;
+}
+
+.bressol-nav__link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -4px;
+    height: 1px;
+    width: 100%;
+    background: transparent;
+}
+
+.bressol-nav__link:hover::after,
+.bressol-nav__link:focus::after {
+    background: var(--bressol-gold);
+}
+
+.bressol-site-header__actions {
+    display: flex;
+    gap: var(--bressol-space-sm);
+}
+
+.bressol-site-header__icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--bressol-border-soft);
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.bressol-site-header__icon:focus {
+    outline: 2px solid var(--bressol-gold);
+    outline-offset: 2px;
+}
+
+.bressol-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bressol-space-md);
+    margin-top: var(--bressol-space-md);
+}
+
+.bressol-hero__layout {
+    display: grid;
+    gap: var(--bressol-space-lg);
+    align-items: center;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bressol-hero__media {
+    min-height: 260px;
+}
+
+.bressol-grid {
+    display: grid;
+    gap: var(--bressol-space-md);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.bressol-card {
+    border: 1px solid var(--bressol-border);
+    border-radius: var(--bressol-radius-md);
+    padding: var(--bressol-space-md);
+    box-shadow: var(--bressol-shadow-xs);
+    background: var(--bressol-white);
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.bressol-card:hover,
+.bressol-card:focus-within {
+    box-shadow: var(--bressol-shadow-sm);
+    border-color: var(--bressol-border-soft);
+    transform: translateY(-2px);
+}
+
+.bressol-card--inline {
+    display: grid;
+    gap: var(--bressol-space-sm);
+    grid-template-columns: 1fr auto;
+    align-items: center;
+}
+
+.bressol-card__title {
+    margin: 0 0 var(--bressol-space-xs);
+    font-size: 1rem;
+}
+
+.bressol-card__meta {
+    font-size: var(--bressol-font-size-sm);
+    color: var(--bressol-text);
+    opacity: 0.72;
+}
+
+.bressol-card__link {
+    text-decoration: none;
+    color: inherit;
+    font-weight: 500;
+}
+
+.bressol-section__title {
+    margin: 0 0 var(--bressol-space-sm);
+    font-size: 1.2rem;
+}
+
+.bressol-cta,
+.bressol-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--bressol-space-xs);
+    margin-top: var(--bressol-space-xs);
+}
+
+.bressol-link {
+    text-decoration: underline;
+    text-decoration-color: var(--bressol-gold);
+}
+
+.bressol-cta {
+    padding: 12px 20px;
+    border: 1px solid var(--bressol-gold);
+    border-radius: var(--bressol-radius-sm);
+    text-decoration: none;
+    color: var(--bressol-text);
+    background: transparent;
+}
+
+.bressol-link + .bressol-link,
+.bressol-cta + .bressol-link {
+    margin-left: var(--bressol-space-sm);
+}
+
+.bressol-cta:hover,
+.bressol-cta:focus {
+    background: var(--bressol-gold-soft);
+    color: var(--bressol-text);
+}
+
+.bressol-list {
+    padding-left: 20px;
+    margin: 0;
+}
+
+.bressol-content h1,
+.bressol-content h2,
+.bressol-content h3 {
+    margin: 0 0 var(--bressol-space-sm);
+}
+
+.bressol-content p {
+    margin: 0 0 var(--bressol-space-sm);
+}
+
+.bressol-content ul {
+    margin: 0 0 var(--bressol-space-sm);
+    padding-left: 20px;
+}
+
+.bressol-disclaimer,
+.bressol-checkout-disclaimer {
+    padding: var(--bressol-space-md);
+    border: 1px solid var(--bressol-border);
+    border-radius: var(--bressol-radius-sm);
+    margin-bottom: var(--bressol-space-md);
+    background: var(--bressol-gray-100);
+}
+
+.bressol-badge {
+    display: inline-block;
+    min-width: 40px;
+    text-align: center;
+    font-weight: 600;
+    margin-right: var(--bressol-space-xs);
+    padding: 4px 8px;
+    border-radius: var(--bressol-radius-xs);
+    border: 1px solid var(--bressol-border);
+}
+
+.bressol-checkout-disclaimer .bressol-badge {
+    background-color: var(--bressol-gold-soft);
+    color: var(--bressol-black);
+}
+
+.bressol-faq__item + .bressol-faq__item {
+    margin-top: var(--bressol-space-md);
+}
+
+.bressol-media {
+    position: relative;
+}
+
+.bressol-image-frame {
+    border: 1px solid var(--bressol-border);
+    border-radius: var(--bressol-radius-md);
+    box-shadow: var(--bressol-shadow-xs);
+    background: var(--bressol-gray-100);
+    min-height: 200px;
+}
+
+.bressol-texture {
+    background: linear-gradient(120deg, var(--bressol-gold-soft), var(--bressol-texture-veil));
+}
+
+.bressol-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(7, 12, 12, 0.35);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease;
+    z-index: 40;
+}
+
+.bressol-overlay.is-active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.bressol-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: min(420px, 90vw);
+    background: var(--bressol-white);
+    box-shadow: var(--bressol-shadow-sm);
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    z-index: 50;
+    padding: var(--bressol-space-lg);
+    overflow-y: auto;
+}
+
+.bressol-panel.is-active {
+    transform: translateX(0);
+}
+
+.bressol-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--bressol-space-md);
+}
+
+.bressol-panel__close {
+    border: none;
+    background: transparent;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+input,
+select,
+textarea {
+    font-family: inherit;
+    font-size: 1rem;
+    border: 1px solid var(--bressol-border);
+    border-radius: var(--bressol-radius-sm);
+    padding: 10px 12px;
+}
+
+.woocommerce-checkout .bressol-age-consent__input {
+    accent-color: var(--bressol-gold);
+}
+
+.screen-reader-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
+.bressol-hidden-field {
+    display: none;
+}
+
+@media (max-width: 720px) {
+    .bressol-site-header__inner {
+        flex-wrap: wrap;
+    }
+
+    .bressol-nav {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .bressol-hero__layout {
+        grid-template-columns: 1fr;
+    }
+}

@@ -14,7 +14,7 @@ if (have_posts()) {
     }
 } else {
     echo '<h1>Bressol Theme</h1>';
-    echo '<p>No hay contenido para mostrar.</p>';
+    echo '<p>Er is geen inhoud om te tonen.</p>';
 }
 
 echo '</main>';
