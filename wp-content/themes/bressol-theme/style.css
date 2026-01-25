@@ -9,29 +9,72 @@ Text Domain: bressol-theme
 */
 
 :root {
-    --bressol-black: #070C0C;
-    --bressol-gold: #BCAF4A;
-    --bressol-gold-soft: rgba(188, 175, 74, 0.18);
-    --bressol-white: #FFFFFF;
-    --bressol-gray-100: #F6F5F2;
-    --bressol-border-soft: rgba(7, 12, 12, 0.12);
+    --bressol-color-bg: #FFFFFF;
+    --bressol-color-surface: #F6F5F2;
+    --bressol-color-text: #070C0C;
+    --bressol-color-muted: rgba(7, 12, 12, 0.68);
+    --bressol-color-border: rgba(7, 12, 12, 0.12);
+    --bressol-color-accent: #BCAF4A;
+    --bressol-color-accent-soft: rgba(188, 175, 74, 0.18);
+    --bressol-color-accent-hover: #A79A3C;
+    --bressol-color-accent-focus: rgba(188, 175, 74, 0.45);
     --bressol-overlay: rgba(7, 12, 12, 0.35);
-    --bressol-shadow-sm: 0 16px 32px rgba(7, 12, 12, 0.12);
-    --bressol-radius-sm: 10px;
-    --bressol-space-xs: 8px;
-    --bressol-space-sm: 12px;
-    --bressol-space-md: 16px;
-    --bressol-space-lg: 24px;
-    --bressol-font-body: "Montserrat", "Segoe UI", system-ui, sans-serif;
-    --bressol-font-size-sm: 0.95rem;
-    --bressol-font-size-md: 1rem;
+
+    --bressol-font-body: "Segoe UI", "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
+    --bressol-font-heading: "Segoe UI", "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
+    --bressol-font-size-1: 0.85rem;
+    --bressol-font-size-2: 0.95rem;
+    --bressol-font-size-3: 1rem;
+    --bressol-font-size-4: 1.15rem;
+    --bressol-font-size-5: 1.5rem;
+    --bressol-font-size-6: 2rem;
+    --bressol-line-height-body: 1.6;
+    --bressol-line-height-heading: 1.25;
+
+    --bressol-space-1: 4px;
+    --bressol-space-2: 8px;
+    --bressol-space-3: 12px;
+    --bressol-space-4: 16px;
+    --bressol-space-5: 24px;
+    --bressol-space-6: 32px;
+    --bressol-space-7: 48px;
+    --bressol-space-8: 64px;
+
+    --bressol-radius-1: 6px;
+    --bressol-radius-2: 10px;
+    --bressol-radius-3: 16px;
+    --bressol-radius-4: 24px;
+
+    --bressol-shadow-1: 0 8px 16px rgba(7, 12, 12, 0.08);
+    --bressol-shadow-2: 0 16px 32px rgba(7, 12, 12, 0.12);
+    --bressol-shadow-3: 0 24px 48px rgba(7, 12, 12, 0.16);
+
+    --bressol-focus-ring: rgba(188, 175, 74, 0.55);
+    --bressol-focus-outline: 2px solid var(--bressol-focus-ring);
+    --bressol-focus-offset: 2px;
+
+    --bressol-black: var(--bressol-color-text);
+    --bressol-gold: var(--bressol-color-accent);
+    --bressol-gold-soft: var(--bressol-color-accent-soft);
+    --bressol-white: var(--bressol-color-bg);
+    --bressol-gray-100: var(--bressol-color-surface);
+    --bressol-border-soft: var(--bressol-color-border);
+    --bressol-shadow-sm: var(--bressol-shadow-2);
+    --bressol-radius-sm: var(--bressol-radius-2);
+    --bressol-space-xs: var(--bressol-space-2);
+    --bressol-space-sm: var(--bressol-space-3);
+    --bressol-space-md: var(--bressol-space-4);
+    --bressol-space-lg: var(--bressol-space-5);
+    --bressol-font-size-sm: var(--bressol-font-size-2);
+    --bressol-font-size-md: var(--bressol-font-size-3);
 }
 
 body {
     margin: 0;
     font-family: var(--bressol-font-body);
-    color: var(--bressol-black);
-    background: var(--bressol-white);
+    color: var(--bressol-color-text);
+    background: var(--bressol-color-bg);
+    line-height: var(--bressol-line-height-body);
 }
 
 .bressol-container {
@@ -41,32 +84,43 @@ body {
 }
 
 .bressol-main {
-    padding: var(--bressol-space-lg) 0 var(--bressol-space-lg);
+    padding: var(--bressol-space-6) 0 var(--bressol-space-6);
 }
 
 .bressol-section {
-    padding: var(--bressol-space-lg) 0;
+    padding: var(--bressol-space-6) 0;
 }
 
 .bressol-section-title {
     margin: 0 0 var(--bressol-space-sm);
-    font-size: 1.5rem;
+    font-size: var(--bressol-font-size-5);
+    font-family: var(--bressol-font-heading);
+    line-height: var(--bressol-line-height-heading);
 }
 
 .bressol-title {
     margin: 0 0 var(--bressol-space-sm);
-    font-size: 2rem;
+    font-size: var(--bressol-font-size-6);
+    font-family: var(--bressol-font-heading);
+    line-height: var(--bressol-line-height-heading);
 }
 
 .bressol-lead {
     margin: 0 0 var(--bressol-space-sm);
-    font-size: 1.05rem;
+    font-size: var(--bressol-font-size-4);
+    color: var(--bressol-color-muted);
 }
 
 .bressol-link {
     text-decoration: none;
     color: inherit;
-    border-bottom: 1px solid var(--bressol-gold);
+    border-bottom: 1px solid var(--bressol-color-accent);
+    transition: border-color 0.2s ease;
+}
+
+.bressol-link:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
 }
 
 .bressol-grid {
@@ -108,8 +162,13 @@ body {
 }
 
 .bressol-nav__link:hover::after,
-.bressol-nav__link:focus::after {
+.bressol-nav__link:focus-visible::after {
     background: var(--bressol-gold);
+}
+
+.bressol-nav__link:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
 }
 
 .bressol-card {
@@ -117,13 +176,19 @@ body {
     border-radius: var(--bressol-radius-sm);
     padding: var(--bressol-space-md);
     background: var(--bressol-white);
-    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
 }
 
 .bressol-card:hover,
 .bressol-card:focus-within {
     box-shadow: var(--bressol-shadow-sm);
     transform: translateY(-2px);
+}
+
+.bressol-card__link:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
+    border-radius: calc(var(--bressol-radius-sm) - 4px);
 }
 
 .bressol-card__title {
@@ -138,17 +203,16 @@ body {
 
 .bressol-card__meta {
     margin: 0;
-    color: var(--bressol-black);
-    opacity: 0.75;
+    color: var(--bressol-color-muted);
     font-size: var(--bressol-font-size-sm);
 }
 
 .bressol-form-shell {
-    padding: var(--bressol-space-lg);
+    padding: var(--bressol-space-6);
     border-radius: var(--bressol-radius-sm);
     border: 1px solid var(--bressol-border-soft);
     background: var(--bressol-white);
-    box-shadow: var(--bressol-shadow-sm);
+    box-shadow: var(--bressol-shadow-1);
 }
 
 .bressol-faq {
@@ -161,24 +225,16 @@ body {
     border-bottom: 1px solid var(--bressol-border-soft);
 }
 
-.bressol-faq__question {
-    margin: 0 0 var(--bressol-space-xs);
-    font-size: 1.1rem;
-}
-
-.bressol-faq__answer {
-    margin: 0;
-    opacity: 0.8;
-}
-
 .bressol-faq__q {
     margin: 0 0 var(--bressol-space-xs);
-    font-size: 1.1rem;
+    font-size: var(--bressol-font-size-4);
+    font-family: var(--bressol-font-heading);
+    line-height: var(--bressol-line-height-heading);
 }
 
 .bressol-faq__a {
     margin: 0;
-    opacity: 0.8;
+    color: var(--bressol-color-muted);
 }
 
 .bressol-cta-panel {
@@ -186,7 +242,7 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: var(--bressol-space-md);
-    padding: var(--bressol-space-lg);
+    padding: var(--bressol-space-6);
     border-radius: var(--bressol-radius-sm);
     background: var(--bressol-gray-100);
     border: 1px solid var(--bressol-border-soft);
@@ -199,14 +255,19 @@ body {
     padding: 12px 18px;
     border-radius: var(--bressol-radius-sm);
     text-decoration: none;
-    border: 1px solid var(--bressol-gold);
-    background: var(--bressol-gold-soft);
-    color: var(--bressol-black);
+    border: 1px solid var(--bressol-color-accent);
+    background: var(--bressol-color-accent-soft);
+    color: var(--bressol-color-text);
+    transition: box-shadow 0.2s ease;
 }
 
-.bressol-button:hover,
-.bressol-button:focus {
-    box-shadow: var(--bressol-shadow-sm);
+.bressol-button:hover {
+    box-shadow: var(--bressol-shadow-1);
+}
+
+.bressol-button:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
 }
 
 .bressol-empty {
@@ -259,9 +320,9 @@ body {
     cursor: pointer;
 }
 
-.bressol-site-header__icon:focus {
-    outline: 2px solid var(--bressol-gold);
-    outline-offset: 2px;
+.bressol-site-header__icon:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
 }
 
 .bressol-overlay {
@@ -286,7 +347,7 @@ body {
     width: min(420px, 92vw);
     height: 100%;
     background: var(--bressol-white);
-    box-shadow: var(--bressol-shadow-sm);
+    box-shadow: var(--bressol-shadow-2);
     transform: translateX(100%);
     transition: transform 0.2s ease;
     z-index: 50;
@@ -322,18 +383,27 @@ body {
 .woocommerce input.button,
 .woocommerce #respond input#submit {
     border-radius: var(--bressol-radius-sm);
-    border: 1px solid var(--bressol-gold);
-    background: var(--bressol-gold-soft);
-    color: var(--bressol-black);
+    border: 1px solid var(--bressol-color-accent);
+    background: var(--bressol-color-accent-soft);
+    color: var(--bressol-color-text);
     padding: 12px 16px;
     font-weight: 500;
+    transition: box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
 .woocommerce a.button:hover,
 .woocommerce button.button:hover,
 .woocommerce input.button:hover,
 .woocommerce #respond input#submit:hover {
-    box-shadow: var(--bressol-shadow-sm);
+    box-shadow: var(--bressol-shadow-1);
+}
+
+.woocommerce a.button:focus-visible,
+.woocommerce button.button:focus-visible,
+.woocommerce input.button:focus-visible,
+.woocommerce #respond input#submit:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
 }
 
 .woocommerce-notices-wrapper,
@@ -367,7 +437,7 @@ body {
 
 .woocommerce div.product p.price,
 .woocommerce ul.products li.product .price {
-    color: var(--bressol-black);
+    color: var(--bressol-color-text);
     font-weight: 600;
 }
 
@@ -418,19 +488,24 @@ body {
     font-family: var(--bressol-font-body);
 }
 
-.bressol-search-field:focus {
-    outline: 2px solid var(--bressol-gold);
-    outline-offset: 2px;
+.bressol-search-field:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
 }
 
 .bressol-search-submit {
     border-radius: var(--bressol-radius-sm);
-    border: 1px solid var(--bressol-gold);
-    background: var(--bressol-gold-soft);
-    color: var(--bressol-black);
+    border: 1px solid var(--bressol-color-accent);
+    background: var(--bressol-color-accent-soft);
+    color: var(--bressol-color-text);
     padding: 12px 16px;
     font-size: var(--bressol-font-size-md);
     cursor: pointer;
+}
+
+.bressol-search-submit:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
 }
 
 .woocommerce-mini-cart {
@@ -463,13 +538,58 @@ body {
     padding: 12px 16px;
     border-radius: var(--bressol-radius-sm);
     text-decoration: none;
-    border: 1px solid var(--bressol-gold);
-    color: var(--bressol-black);
+    border: 1px solid var(--bressol-color-accent);
+    color: var(--bressol-color-text);
     background: transparent;
 }
 
 .woocommerce-mini-cart__buttons a.checkout {
-    background: var(--bressol-gold-soft);
+    background: var(--bressol-color-accent-soft);
+}
+
+input[type="text"],
+input[type="email"],
+input[type="search"],
+input[type="tel"],
+input[type="url"],
+input[type="number"],
+select,
+textarea {
+    font-family: var(--bressol-font-body);
+    font-size: var(--bressol-font-size-md);
+    border: 1px solid var(--bressol-border-soft);
+    border-radius: var(--bressol-radius-sm);
+    padding: 12px 14px;
+    background: var(--bressol-white);
+    color: var(--bressol-color-text);
+}
+
+input[type="text"]:focus-visible,
+input[type="email"]:focus-visible,
+input[type="search"]:focus-visible,
+input[type="tel"]:focus-visible,
+input[type="url"]:focus-visible,
+input[type="number"]:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
+}
+
+@media (max-width: 640px) {
+    .bressol-container {
+        padding: 0 var(--bressol-space-4);
+    }
+
+    .bressol-main,
+    .bressol-section {
+        padding: var(--bressol-space-5) 0;
+    }
+
+    .bressol-cta-panel,
+    .bressol-form-shell {
+        padding: var(--bressol-space-5);
+    }
 }
 
 .woocommerce-mini-cart__empty-message {
