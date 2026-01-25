@@ -66,7 +66,6 @@ $woo_active = class_exists('WooCommerce') && function_exists('woocommerce_produc
         </section>
     <?php endif; ?>
 
-    <?php do_action('woocommerce_after_main_content'); ?>
 <?php endif; ?>
 
 <?php if (!$woo_active && $longform_html) : ?>
@@ -109,6 +108,10 @@ if ($faq_raw !== '') {
             </div>
         </div>
     </section>
+<?php endif; ?>
+
+<?php if ($woo_active) : ?>
+    <?php do_action('woocommerce_after_main_content'); ?>
 <?php endif; ?>
 
 <?php

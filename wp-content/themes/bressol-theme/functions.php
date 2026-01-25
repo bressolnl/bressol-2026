@@ -22,6 +22,13 @@ add_action('wp_enqueue_scripts', function () {
     wp_enqueue_style('bressol-theme', get_stylesheet_uri(), [], $style_version);
 });
 
+add_action('wp', function () {
+    if (!function_exists('is_tax') || !is_tax('bressol_moment')) {
+        return;
+    }
+    remove_action('wp_head', 'rel_canonical');
+}, 1);
+
 add_action('wp_head', function () {
     do_action('bressol_cmp_head');
 }, 1);
