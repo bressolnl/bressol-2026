@@ -38,6 +38,7 @@ Arbol de conocimiento
 
 6) Operativa (cron, CLI, jobs)
 - `docs/brain/ops/00-cron-y-cli.md`
+- `docs/brain/ops/01-consent-cmp.md`
 
 Relacion con docs existentes
 - `docs/00-vision-and-principles.md` y `docs/10-architecture-bressol-core.md` son la base original.

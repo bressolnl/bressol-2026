@@ -7,3 +7,490 @@ Description: Tema propio Bressol 2026 (sin Elementor). UI/UX + plantillas + rend
 Version: 0.1.0
 Text Domain: bressol-theme
 */
+
+:root {
+    --bressol-black: #070C0C;
+    --bressol-gold: #BCAF4A;
+    --bressol-gold-soft: rgba(188, 175, 74, 0.18);
+    --bressol-white: #FFFFFF;
+    --bressol-gray-100: #F6F5F2;
+    --bressol-border-soft: rgba(7, 12, 12, 0.12);
+    --bressol-overlay: rgba(7, 12, 12, 0.35);
+    --bressol-shadow-sm: 0 16px 32px rgba(7, 12, 12, 0.12);
+    --bressol-radius-sm: 10px;
+    --bressol-space-xs: 8px;
+    --bressol-space-sm: 12px;
+    --bressol-space-md: 16px;
+    --bressol-space-lg: 24px;
+    --bressol-font-body: "Montserrat", "Segoe UI", system-ui, sans-serif;
+    --bressol-font-size-sm: 0.95rem;
+    --bressol-font-size-md: 1rem;
+}
+
+body {
+    margin: 0;
+    font-family: var(--bressol-font-body);
+    color: var(--bressol-black);
+    background: var(--bressol-white);
+}
+
+.bressol-container {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 var(--bressol-space-lg);
+}
+
+.bressol-main {
+    padding: var(--bressol-space-lg) 0 var(--bressol-space-lg);
+}
+
+.bressol-section {
+    padding: var(--bressol-space-lg) 0;
+}
+
+.bressol-section-title {
+    margin: 0 0 var(--bressol-space-sm);
+    font-size: 1.5rem;
+}
+
+.bressol-title {
+    margin: 0 0 var(--bressol-space-sm);
+    font-size: 2rem;
+}
+
+.bressol-lead {
+    margin: 0 0 var(--bressol-space-sm);
+    font-size: 1.05rem;
+}
+
+.bressol-link {
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 1px solid var(--bressol-gold);
+}
+
+.bressol-grid {
+    display: grid;
+    gap: var(--bressol-space-md);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.bressol-nav {
+    font-size: var(--bressol-font-size-sm);
+}
+
+.bressol-nav__list {
+    display: flex;
+    gap: var(--bressol-space-md);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.bressol-nav__item {
+    display: flex;
+}
+
+.bressol-nav__link {
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+}
+
+.bressol-nav__link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -4px;
+    height: 1px;
+    width: 100%;
+    background: transparent;
+}
+
+.bressol-nav__link:hover::after,
+.bressol-nav__link:focus::after {
+    background: var(--bressol-gold);
+}
+
+.bressol-card {
+    border: 1px solid var(--bressol-border-soft);
+    border-radius: var(--bressol-radius-sm);
+    padding: var(--bressol-space-md);
+    background: var(--bressol-white);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.bressol-card:hover,
+.bressol-card:focus-within {
+    box-shadow: var(--bressol-shadow-sm);
+    transform: translateY(-2px);
+}
+
+.bressol-card__title {
+    margin: 0 0 var(--bressol-space-xs);
+    font-size: 1.1rem;
+}
+
+.bressol-card__link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.bressol-card__meta {
+    margin: 0;
+    color: var(--bressol-black);
+    opacity: 0.75;
+    font-size: var(--bressol-font-size-sm);
+}
+
+.bressol-form-shell {
+    padding: var(--bressol-space-lg);
+    border-radius: var(--bressol-radius-sm);
+    border: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-white);
+    box-shadow: var(--bressol-shadow-sm);
+}
+
+.bressol-faq {
+    display: grid;
+    gap: var(--bressol-space-md);
+}
+
+.bressol-faq__item {
+    padding-bottom: var(--bressol-space-md);
+    border-bottom: 1px solid var(--bressol-border-soft);
+}
+
+.bressol-faq__question {
+    margin: 0 0 var(--bressol-space-xs);
+    font-size: 1.1rem;
+}
+
+.bressol-faq__answer {
+    margin: 0;
+    opacity: 0.8;
+}
+
+.bressol-faq__q {
+    margin: 0 0 var(--bressol-space-xs);
+    font-size: 1.1rem;
+}
+
+.bressol-faq__a {
+    margin: 0;
+    opacity: 0.8;
+}
+
+.bressol-cta-panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bressol-space-md);
+    padding: var(--bressol-space-lg);
+    border-radius: var(--bressol-radius-sm);
+    background: var(--bressol-gray-100);
+    border: 1px solid var(--bressol-border-soft);
+}
+
+.bressol-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 18px;
+    border-radius: var(--bressol-radius-sm);
+    text-decoration: none;
+    border: 1px solid var(--bressol-gold);
+    background: var(--bressol-gold-soft);
+    color: var(--bressol-black);
+}
+
+.bressol-button:hover,
+.bressol-button:focus {
+    box-shadow: var(--bressol-shadow-sm);
+}
+
+.bressol-empty {
+    padding: var(--bressol-space-md);
+    background: var(--bressol-gray-100);
+    border-radius: var(--bressol-radius-sm);
+}
+
+.bressol-site-header {
+    border-bottom: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-white);
+}
+
+.bressol-site-footer {
+    border-top: 1px solid var(--bressol-border-soft);
+    padding: var(--bressol-space-md) 0;
+    margin-top: var(--bressol-space-lg);
+}
+
+.bressol-site-header__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bressol-space-md);
+    padding: var(--bressol-space-md) 0;
+}
+
+.bressol-brand {
+    text-decoration: none;
+    color: inherit;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.bressol-site-header__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--bressol-space-sm);
+}
+
+.bressol-site-header__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--bressol-border-soft);
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.bressol-site-header__icon:focus {
+    outline: 2px solid var(--bressol-gold);
+    outline-offset: 2px;
+}
+
+.bressol-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bressol-overlay);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease;
+    z-index: 40;
+}
+
+.bressol-overlay.is-active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.bressol-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: min(420px, 92vw);
+    height: 100%;
+    background: var(--bressol-white);
+    box-shadow: var(--bressol-shadow-sm);
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    z-index: 50;
+    padding: var(--bressol-space-lg);
+    overflow-y: auto;
+}
+
+.bressol-panel.is-active {
+    transform: translateX(0);
+}
+
+.bressol-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--bressol-space-md);
+}
+
+.bressol-panel__title {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.bressol-panel__close {
+    border: none;
+    background: transparent;
+    font-size: 1.4rem;
+    cursor: pointer;
+}
+
+.woocommerce a.button,
+.woocommerce button.button,
+.woocommerce input.button,
+.woocommerce #respond input#submit {
+    border-radius: var(--bressol-radius-sm);
+    border: 1px solid var(--bressol-gold);
+    background: var(--bressol-gold-soft);
+    color: var(--bressol-black);
+    padding: 12px 16px;
+    font-weight: 500;
+}
+
+.woocommerce a.button:hover,
+.woocommerce button.button:hover,
+.woocommerce input.button:hover,
+.woocommerce #respond input#submit:hover {
+    box-shadow: var(--bressol-shadow-sm);
+}
+
+.woocommerce-notices-wrapper,
+.woocommerce-message,
+.woocommerce-error,
+.woocommerce-info {
+    border-radius: var(--bressol-radius-sm);
+    border: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-gray-100);
+    padding: var(--bressol-space-sm) var(--bressol-space-md);
+    margin-bottom: var(--bressol-space-md);
+}
+
+.woocommerce ul.products {
+    display: grid;
+    gap: var(--bressol-space-md);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.woocommerce ul.products li.product {
+    padding: var(--bressol-space-md);
+    border: 1px solid var(--bressol-border-soft);
+    border-radius: var(--bressol-radius-sm);
+    background: var(--bressol-white);
+}
+
+.woocommerce div.product .product_title {
+    font-size: 1.6rem;
+    margin-bottom: var(--bressol-space-sm);
+}
+
+.woocommerce div.product p.price,
+.woocommerce ul.products li.product .price {
+    color: var(--bressol-black);
+    font-weight: 600;
+}
+
+.woocommerce-cart table.cart,
+.woocommerce-checkout table.shop_table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.woocommerce-cart table.cart th,
+.woocommerce-cart table.cart td,
+.woocommerce-checkout table.shop_table th,
+.woocommerce-checkout table.shop_table td {
+    border-bottom: 1px solid var(--bressol-border-soft);
+    padding: var(--bressol-space-sm) 0;
+}
+
+.woocommerce-account .woocommerce-MyAccount-navigation {
+    border: 1px solid var(--bressol-border-soft);
+    border-radius: var(--bressol-radius-sm);
+    padding: var(--bressol-space-sm);
+    margin-bottom: var(--bressol-space-md);
+}
+
+@media (max-width: 720px) {
+    .bressol-site-header__inner {
+        flex-wrap: wrap;
+    }
+
+    .bressol-nav__list {
+        flex-wrap: wrap;
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+.bressol-search-form {
+    display: grid;
+    gap: var(--bressol-space-sm);
+}
+
+.bressol-search-field {
+    width: 100%;
+    border: 1px solid var(--bressol-border-soft);
+    border-radius: var(--bressol-radius-sm);
+    padding: 12px 14px;
+    font-size: var(--bressol-font-size-md);
+    font-family: var(--bressol-font-body);
+}
+
+.bressol-search-field:focus {
+    outline: 2px solid var(--bressol-gold);
+    outline-offset: 2px;
+}
+
+.bressol-search-submit {
+    border-radius: var(--bressol-radius-sm);
+    border: 1px solid var(--bressol-gold);
+    background: var(--bressol-gold-soft);
+    color: var(--bressol-black);
+    padding: 12px 16px;
+    font-size: var(--bressol-font-size-md);
+    cursor: pointer;
+}
+
+.woocommerce-mini-cart {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.woocommerce-mini-cart-item + .woocommerce-mini-cart-item {
+    border-top: 1px solid var(--bressol-border-soft);
+    margin-top: var(--bressol-space-sm);
+    padding-top: var(--bressol-space-sm);
+}
+
+.woocommerce-mini-cart__total {
+    margin-top: var(--bressol-space-md);
+    font-weight: 600;
+}
+
+.woocommerce-mini-cart__buttons {
+    display: grid;
+    gap: var(--bressol-space-sm);
+    margin-top: var(--bressol-space-md);
+}
+
+.woocommerce-mini-cart__buttons a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 16px;
+    border-radius: var(--bressol-radius-sm);
+    text-decoration: none;
+    border: 1px solid var(--bressol-gold);
+    color: var(--bressol-black);
+    background: transparent;
+}
+
+.woocommerce-mini-cart__buttons a.checkout {
+    background: var(--bressol-gold-soft);
+}
+
+.woocommerce-mini-cart__empty-message {
+    padding: var(--bressol-space-md);
+    background: var(--bressol-gray-100);
+    border-radius: var(--bressol-radius-sm);
+    text-align: center;
+    font-size: var(--bressol-font-size-sm);
+}
+
+.screen-reader-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+
+.bressol-hidden-field {
+    display: none;
+}

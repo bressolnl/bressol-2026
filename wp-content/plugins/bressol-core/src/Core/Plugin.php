@@ -33,6 +33,7 @@ final class Plugin
         $this->modules[] = new \Bressol\Modules\Recommendations\RecommendationsModule();
         $this->modules[] = new \Bressol\Modules\PostAddToCartModal\PostAddToCartModalModule();
         $this->modules[] = new \Bressol\Modules\Taxonomies\TaxonomiesModule();
+        $this->modules[] = new \Bressol\Modules\Seo\SeoMetaModule();
         $this->modules[] = new \Bressol\Modules\Esp\EspModule();
         $this->modules[] = new \Bressol\Modules\Crm\CrmModule();
         $this->modules[] = new \Bressol\Modules\Pos\PosModule();

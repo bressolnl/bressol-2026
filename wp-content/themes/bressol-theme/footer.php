@@ -3,8 +3,10 @@ if (!defined('ABSPATH')) {
     exit;
 }
 ?>
-<footer style="padding:16px; border-top:1px solid #ddd; margin-top:24px;">
-    <small>&copy; <?php echo esc_html(date('Y')); ?> Bressol</small>
+<footer class="bressol-site-footer">
+    <div class="bressol-container">
+        <small>&copy; <?php echo esc_html(date('Y')); ?> Bressol</small>
+    </div>
 </footer>
 <?php wp_footer(); ?>
 </body>
