@@ -71,6 +71,18 @@ Columnas:
 Columnas:
 - `order_id`, `diff_tax_cents`
 
+### Events CSV (reporte por evento)
+Columnas:
+- `event_id`, `event_title`, `type`, `start_at`, `city`
+- `orders_count`
+- `total_incl_tax_cents`, `tax_total_cents`, `total_excl_tax_cents`
+- `refunds_incl_tax_cents`
+- `market_cost_cents`
+- `event_cost_fixed_cents`, `event_cost_variable_cents`
+- `profit_estimated_excl_tax_cents`
+- `tax_breakdown_json`
+- `computed_at`, `filters_hash`
+
 ## Privacidad y permisos
 - `manage_woocommerce` para ver Dashboard/Exports.
 - Export PII: `bressol_sensitive_exports` + `export_pii_enabled` = true.
@@ -87,6 +99,28 @@ Columnas:
 - Clave: `bressol_sa_v{version}_{sha1}`.
 - TTLs: dashboard 10 min, daily 60 min.
 - Invalidation: `woocommerce_order_status_changed` (si entra/sale completed), `woocommerce_order_refunded`.
+
+## Reporte por evento
+- Fuente: `_bressol_event_id` en pedidos + `wp_bressol_events`.
+- Filtros: `date_from`, `date_to`, `channel`, `event_id` (opcional), status `completed`.
+- Rolup sin PII, agrupa por `event_id` (0 = Sin evento).
+- Caching: TTL 15 min, versionado de SalesAnalytics.
+- Tradeoff: cambios en eventos no bump cache; se refresca por TTL.
+- En UI se muestra `computed_at`, `source` (cache/recalculado) y `orders_count`.
+
+### Costes variables (cost_variable_json)
+Reglas interpretadas:
+- `per_day_cents` * dias (min 1, segun `start_at`/`end_at`)
+- `percent_sales_basis_points` aplicado a `total_excl_tax_cents`
+- `flat_cents` suma directa
+Otras claves se ignoran.
+
+Hardening:
+- Si `start_at/end_at` invalidos o `end < start`, se usa duracion 1 dia y se audita (max 10 ids por ejecucion).
+- `%` aplica sobre base `max(0, total_excl_tax_cents - refunds_excl_tax_cents)`.
+
+### Formula profit por evento
+`profit_estimated_excl_tax_cents = total_excl_tax_cents - refunds_excl_tax_cents - market_cost_cents - event_cost_fixed_cents - event_cost_variable_cents`
 
 ## Hardening
 - Rate limit por usuario: transient `bressol_sa_export_rl_{user_id}` (120s).

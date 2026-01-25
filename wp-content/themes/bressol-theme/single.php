@@ -6,7 +6,7 @@ if (!defined('ABSPATH')) {
 get_header();
 ?>
 
-<main class="bressol-main">
+<main id="main" class="bressol-main">
     <section class="bressol-section">
         <div class="bressol-container">
             <?php if (have_posts()) : ?>

@@ -11,6 +11,7 @@ if (!defined('ABSPATH')) {
 </head>
 <body <?php body_class(); ?>>
 <?php wp_body_open(); ?>
+<a class="bressol-skip-link" href="#main"><?php esc_html_e('Skip to content', 'bressol-theme'); ?></a>
 <header class="bressol-site-header">
     <div class="bressol-site-header__inner bressol-container">
         <a class="bressol-brand" href="<?php echo esc_url(home_url('/')); ?>">
@@ -33,6 +34,10 @@ if (!defined('ABSPATH')) {
                 ]); ?>
             <?php endif; ?>
         </nav>
+        <?php $header_cta_link = bressol_get_page_link('advies', '/'); ?>
+        <a class="bressol-header-cta" href="<?php echo esc_url($header_cta_link); ?>">
+            <?php esc_html_e('Advies', 'bressol-theme'); ?>
+        </a>
         <div class="bressol-site-header__actions" aria-label="<?php echo esc_attr__('Snelle acties', 'bressol-theme'); ?>">
             <button class="bressol-site-header__icon" type="button" data-bressol-toggle="search" aria-expanded="false" aria-controls="bressol-panel-search">
                 <span class="screen-reader-text"><?php esc_html_e('Zoeken', 'bressol-theme'); ?></span>

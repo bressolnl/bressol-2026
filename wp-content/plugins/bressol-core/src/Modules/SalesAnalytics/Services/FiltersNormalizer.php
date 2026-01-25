@@ -30,6 +30,18 @@ final class FiltersNormalizer
         return $normalized;
     }
 
+    /** @param array<string, mixed> $filters
+     *  @return array<string, string>
+     */
+    public static function normalize_events(array $filters): array
+    {
+        $base = self::normalize($filters);
+        $eventId = isset($filters['event_id']) ? (int) $filters['event_id'] : 0;
+        $base['event_id'] = $eventId > 0 ? (string) $eventId : '';
+
+        return $base;
+    }
+
     private static function normalize_date(string $value): string
     {
         if ($value === '') {

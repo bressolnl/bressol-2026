@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace Bressol\Modules\SalesAnalytics\Services;
 
 use Bressol\Modules\SalesAnalytics\Repositories\OrderQuery;
+use Bressol\Modules\SalesAnalytics\Services\EventRollupService;
+use Bressol\Modules\SalesAnalytics\Services\FiltersNormalizer;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -18,6 +20,7 @@ final class ExportService
     private TaxBreakdownService $taxBreakdownService;
     private CacheService $cacheService;
     private AuditLogger $auditLogger;
+    private EventRollupService $eventRollupService;
 
     public function __construct(Settings $settings, Capabilities $capabilities, ?CacheService $cacheService = null)
     {
@@ -28,6 +31,7 @@ final class ExportService
         $this->taxBreakdownService = new TaxBreakdownService();
         $this->cacheService = $cacheService ?? new CacheService();
         $this->auditLogger = new AuditLogger();
+        $this->eventRollupService = new EventRollupService($this->cacheService);
     }
 
     /** @param array<string, mixed> $filters */
@@ -244,6 +248,43 @@ final class ExportService
         ]);
     }
 
+    /** @param array<string, mixed> $filters */
+    public function stream_events_csv(array $filters): void
+    {
+        $rollup = $this->eventRollupService->get_rollup($filters, 15 * MINUTE_IN_SECONDS, 20000);
+        if (!empty($rollup['too_large'])) {
+            wp_die('Rango demasiado grande. Acota fechas o usa un rango menor.');
+        }
+
+        $rows = $rollup['rows'] ?? [];
+        $computedAt = isset($rollup['meta']['computed_at']) ? (string) $rollup['meta']['computed_at'] : '';
+        $filtersHash = $this->build_filters_hash($filters);
+        nocache_headers();
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $this->build_events_filename() . '"');
+
+        $output = fopen('php://output', 'w');
+        if (!$output) {
+            wp_die('No se pudo abrir el export.');
+        }
+
+        fputcsv($output, $this->get_events_header());
+        foreach ($rows as $row) {
+            fputcsv($output, $this->map_events_row($row, $computedAt, $filtersHash));
+        }
+
+        fclose($output);
+
+        $this->auditLogger->log('sales_export_events_generated', [
+            'export_type' => 'events',
+            'filters' => $filters,
+            'include_pii' => false,
+            'result' => 'success',
+            'rows_count' => is_array($rows) ? count($rows) : 0,
+            'request_uri' => $this->get_request_uri(),
+        ]);
+    }
+
     private function build_orders_filename(): string
     {
         return 'bressol-sales-orders-' . gmdate('Ymd-Hi') . '.csv';
@@ -257,6 +298,11 @@ final class ExportService
     private function build_discrepancies_filename(): string
     {
         return 'bressol-sales-discrepancies-' . gmdate('Ymd-Hi') . '.csv';
+    }
+
+    private function build_events_filename(): string
+    {
+        return 'bressol-sales-events-' . gmdate('Ymd-Hi') . '.csv';
     }
 
     /** @return string[] */
@@ -313,6 +359,30 @@ final class ExportService
             'net_sales_excl_tax_cents',
             'profit_estimated_excl_tax_cents',
             'tax_breakdown_json',
+        ];
+    }
+
+    /** @return string[] */
+    private function get_events_header(): array
+    {
+        return [
+            'event_id',
+            'event_title',
+            'type',
+            'start_at',
+            'city',
+            'orders_count',
+            'total_incl_tax_cents',
+            'tax_total_cents',
+            'total_excl_tax_cents',
+            'refunds_incl_tax_cents',
+            'market_cost_cents',
+            'event_cost_fixed_cents',
+            'event_cost_variable_cents',
+            'profit_estimated_excl_tax_cents',
+            'tax_breakdown_json',
+            'computed_at',
+            'filters_hash',
         ];
     }
 
@@ -376,6 +446,40 @@ final class ExportService
             $row['profit_estimated_excl_tax_cents'],
             $this->format_tax_breakdown_json($row['tax_breakdown']),
         ];
+    }
+
+    /** @param array<string, mixed> $row
+     *  @return array<int, string|int>
+     */
+    private function map_events_row(array $row, string $computedAt, string $filtersHash): array
+    {
+        return [
+            (int) ($row['event_id'] ?? 0),
+            (string) ($row['event_title'] ?? ''),
+            (string) ($row['type'] ?? ''),
+            (string) ($row['start_at'] ?? ''),
+            (string) ($row['city'] ?? ''),
+            (int) ($row['orders_count'] ?? 0),
+            (int) ($row['total_incl_tax_cents'] ?? 0),
+            (int) ($row['tax_total_cents'] ?? 0),
+            (int) ($row['total_excl_tax_cents'] ?? 0),
+            (int) ($row['refunds_incl_tax_cents'] ?? 0),
+            (int) ($row['market_cost_cents'] ?? 0),
+            (int) ($row['event_cost_fixed_cents'] ?? 0),
+            (int) ($row['event_cost_variable_cents'] ?? 0),
+            (int) ($row['profit_estimated_excl_tax_cents'] ?? 0),
+            $this->format_tax_breakdown_json($row['tax_breakdown'] ?? []),
+            $computedAt,
+            $filtersHash,
+        ];
+    }
+
+    private function build_filters_hash(array $filters): string
+    {
+        $normalized = FiltersNormalizer::normalize_events($filters);
+        $hash = sha1(wp_json_encode($normalized));
+
+        return $hash ?: '';
     }
 
     /** @param array<string, mixed> $filters */

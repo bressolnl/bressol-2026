@@ -7,10 +7,36 @@ Metas de producto (packs)
 - `_bressol_pack_focus`: CSV (ej: `oil,salt,vinegar`).
 - `_bressol_pack_themes`: CSV (ej: `cooking,borrel`).
 
+Metas de producto (SEO / PDP)
+- `bressol_pdp_intro` (HTML)
+- `bressol_pdp_longform` (HTML)
+- `bressol_origin_ref` (HTML)
+- `bressol_pdp_faq` (JSON o HTML)
+- `bressol_smaak_textuur1/2/3`
+- `bressol_smaak_ingredienten1/2/3`
+- `bressol_smaak_karakter1/2/3`
+- `bressol_usage_tips` (HTML)
+- `bressol_seo_usage_images` (array IDs)
+- `bressol_seo_quote_title`
+- `bressol_seo_quote_text` (HTML)
+- Packs (SEO):
+  - `bressol_pack_recommended_moments` (CSV slugs)
+  - `bressol_pack_cross_sell_categories` (CSV slugs)
+
 Taxonomias
 - `bressol_moment` (product):
   - registrada en `TaxonomiesModule`.
   - visible en admin, REST y columna en listado de productos.
+
+Term meta (categorias y moments)
+- Categoria producto:
+  - `bressol_cat_intro` (HTML)
+  - `bressol_cat_longform` (HTML)
+  - `bressol_cat_faq` (JSON)
+- Momento:
+  - `bressol_moment_intro` (HTML)
+  - `bressol_moment_longform` (HTML)
+  - `bressol_moment_faq` (JSON)
 
 Convenciones de categorias (families)
 - Families por slugs estables: `oil`, `salt`, `vinegar`, `drinks`, `olives`, `tapenade`, etc.
@@ -66,3 +92,24 @@ POS (metas de pedido)
 - `_bressol_pos_min_redemption_points_snapshot`
 - `_bressol_pos_max_redemption_percent_snapshot`
 - `_bressol_pos_redemption_calculated_from_total_cents`
+- Internos POS:
+  - `_bressol_internal_order`
+  - `_bressol_internal_reason`
+  - `_bressol_internal_invalid`
+  - `_bressol_stock_reduced`
+
+MarketsEvents (metas de pedido)
+- `_bressol_event_id`
+
+POS (tablas)
+Prefijo: `wp_bressol_` (usa prefix real de WP).
+- `bressol_opened_items`
+- `bressol_opened_item_events`
+
+MarketsEvents (tablas)
+Prefijo: `wp_bressol_` (usa prefix real de WP).
+- `bressol_events`
+
+Forecasting (tablas)
+Prefijo: `wp_bressol_` (usa prefix real de WP).
+- `bressol_forecast_snapshots`

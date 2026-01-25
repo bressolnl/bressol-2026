@@ -6,6 +6,7 @@ namespace Bressol\Modules\SalesAnalytics\Admin;
 use Bressol\Modules\SalesAnalytics\Repositories\OrderQuery;
 use Bressol\Modules\SalesAnalytics\Services\Capabilities;
 use Bressol\Modules\SalesAnalytics\Services\CacheService;
+use Bressol\Modules\SalesAnalytics\Services\EventRollupService;
 use Bressol\Modules\SalesAnalytics\Services\MetricsExtractor;
 use Bressol\Modules\SalesAnalytics\Services\Settings;
 use Bressol\Modules\SalesAnalytics\Services\TaxBreakdownService;
@@ -25,6 +26,7 @@ final class AdminPages
     private OrderQuery $orderQuery;
     private TaxBreakdownService $taxBreakdownService;
     private MetricsExtractor $metricsExtractor;
+    private EventRollupService $eventRollupService;
 
     public function __construct(
         Settings $settings,
@@ -37,6 +39,7 @@ final class AdminPages
         $this->orderQuery = new OrderQuery();
         $this->taxBreakdownService = new TaxBreakdownService();
         $this->metricsExtractor = new MetricsExtractor();
+        $this->eventRollupService = new EventRollupService($cacheService);
     }
 
     public function registerMenus(): void
@@ -195,6 +198,71 @@ final class AdminPages
         }
 
         echo '</div>';
+
+        $eventFilters = $this->get_event_filters_from_request($_GET);
+        $eventsRollup = $this->eventRollupService->get_rollup($eventFilters, 15 * MINUTE_IN_SECONDS, 20000);
+        echo '<div class="wrap" style="margin-top:24px;">';
+        echo '<h2>Reporte por evento</h2>';
+        echo $this->render_event_filters_form($eventFilters);
+
+        $meta = $eventsRollup['meta'] ?? [];
+        $computedAt = isset($meta['computed_at']) ? (string) $meta['computed_at'] : '';
+        $ordersCount = isset($meta['orders_count']) ? (int) $meta['orders_count'] : 0;
+        $cacheHit = !empty($meta['cache_hit']);
+        $source = $cacheHit ? 'cache' : 'recalculado';
+        if ($computedAt !== '') {
+            echo '<p class="description">Último cálculo: ' . esc_html($computedAt) . ' (' . esc_html($source) . ') — ' . esc_html((string) $ordersCount) . ' pedidos.</p>';
+        }
+
+        if (!empty($eventsRollup['too_large'])) {
+            echo '<p class="notice notice-warning" style="padding:8px 12px;">';
+            echo 'Rango demasiado grande para reporte por evento. Acota fechas o exporta por evento.';
+            echo '</p>';
+        } else {
+            $rows = $eventsRollup['rows'] ?? [];
+            $sinEventoCount = isset($rows[0]['orders_count']) ? (int) $rows[0]['orders_count'] : 0;
+            if ($ordersCount > 0 && $sinEventoCount > 0 && ($sinEventoCount / $ordersCount) > 0.3) {
+                echo '<p class="notice notice-warning" style="padding:8px 12px;">';
+                echo 'Muchos pedidos POS/Web no están vinculados a evento; revisa agenda activa/selección.';
+                echo '</p>';
+            }
+            echo '<table class="widefat striped" style="max-width:1200px;">';
+            echo '<thead><tr>';
+            echo '<th>Event ID</th><th>Título</th><th>Tipo</th><th>Inicio</th><th>Ciudad</th><th>Pedidos</th><th>Total incl</th><th>Tax</th><th>Total excl</th><th>Refunds</th><th>Coste mercado</th><th>Coste fijo</th><th>Coste variable</th><th>Profit est.</th>';
+            echo '</tr></thead><tbody>';
+            if ($rows === []) {
+                echo '<tr><td colspan="14">No hay datos para el rango seleccionado.</td></tr>';
+            } else {
+                foreach ($rows as $row) {
+                    echo '<tr>';
+                    echo '<td>' . esc_html((string) ($row['event_id'] ?? 0)) . '</td>';
+                    echo '<td>' . esc_html((string) ($row['event_title'] ?? '')) . '</td>';
+                    echo '<td>' . esc_html((string) ($row['type'] ?? '')) . '</td>';
+                    echo '<td>' . esc_html((string) ($row['start_at'] ?? '')) . '</td>';
+                    echo '<td>' . esc_html((string) ($row['city'] ?? '')) . '</td>';
+                    echo '<td>' . esc_html((string) ($row['orders_count'] ?? 0)) . '</td>';
+                    echo '<td>' . esc_html($this->format_euros((int) ($row['total_incl_tax_cents'] ?? 0))) . '</td>';
+                    echo '<td>' . esc_html($this->format_euros((int) ($row['tax_total_cents'] ?? 0))) . '</td>';
+                    echo '<td>' . esc_html($this->format_euros((int) ($row['total_excl_tax_cents'] ?? 0))) . '</td>';
+                    echo '<td>' . esc_html($this->format_euros((int) ($row['refunds_incl_tax_cents'] ?? 0))) . '</td>';
+                    echo '<td>' . esc_html($this->format_euros((int) ($row['market_cost_cents'] ?? 0))) . '</td>';
+                    echo '<td>' . esc_html($this->format_euros((int) ($row['event_cost_fixed_cents'] ?? 0))) . '</td>';
+                    echo '<td>' . esc_html($this->format_euros((int) ($row['event_cost_variable_cents'] ?? 0))) . '</td>';
+                    echo '<td>' . esc_html($this->format_euros((int) ($row['profit_estimated_excl_tax_cents'] ?? 0))) . '</td>';
+                    echo '</tr>';
+                }
+            }
+            echo '</tbody></table>';
+
+            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="margin-top:12px;">';
+            wp_nonce_field('bressol_sales_export_events_nonce');
+            echo '<input type="hidden" name="action" value="bressol_sales_export_events" />';
+            echo $this->render_event_filters_hidden_inputs($eventFilters);
+            echo '<button type="submit" class="button">Exportar eventos (CSV)</button>';
+            echo '</form>';
+        }
+
+        echo '</div>';
     }
 
     public function renderExportsPage(): void
@@ -244,6 +312,13 @@ final class AdminPages
         echo '<button type="submit" class="button">Exportar agregado diario (CSV)</button>';
         echo '</form>';
 
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="margin:12px 0;">';
+        wp_nonce_field('bressol_sales_export_events_nonce');
+        echo '<input type="hidden" name="action" value="bressol_sales_export_events" />';
+        echo $this->render_event_filters_hidden_inputs($this->get_event_filters_from_request($_GET));
+        echo '<button type="submit" class="button">Exportar eventos (CSV)</button>';
+        echo '</form>';
+
         echo '</div>';
     }
 
@@ -260,6 +335,24 @@ final class AdminPages
             'date_to' => $this->sanitize_date($to),
             'channel' => $this->sanitize_channel($channel),
             'market_id' => $marketId,
+        ];
+    }
+
+    /** @param array<string, mixed> $input
+     *  @return array<string, mixed>
+     */
+    private function get_event_filters_from_request(array $input): array
+    {
+        $from = isset($input['event_date_from']) ? sanitize_text_field(wp_unslash($input['event_date_from'])) : '';
+        $to = isset($input['event_date_to']) ? sanitize_text_field(wp_unslash($input['event_date_to'])) : '';
+        $channel = isset($input['event_channel']) ? sanitize_text_field(wp_unslash($input['event_channel'])) : 'all';
+        $eventId = isset($input['event_id']) ? absint($input['event_id']) : 0;
+
+        return [
+            'date_from' => $this->sanitize_date($from),
+            'date_to' => $this->sanitize_date($to),
+            'channel' => $this->sanitize_channel($channel),
+            'event_id' => $eventId,
         ];
     }
 
@@ -464,6 +557,26 @@ final class AdminPages
     }
 
     /** @param array<string, mixed> $filters */
+    private function render_event_filters_form(array $filters): string
+    {
+        $html = '<form method="get" style="margin:16px 0;">';
+        $html .= '<input type="hidden" name="page" value="' . esc_attr($this->get_current_page_slug()) . '" />';
+        $html .= '<label>Desde <input type="date" name="event_date_from" value="' . esc_attr((string) $filters['date_from']) . '" /></label> ';
+        $html .= '<label>Hasta <input type="date" name="event_date_to" value="' . esc_attr((string) $filters['date_to']) . '" /></label> ';
+        $html .= '<label>Canal ';
+        $html .= '<select name="event_channel">';
+        $html .= '<option value="all" ' . selected((string) $filters['channel'], 'all', false) . '>Todos</option>';
+        $html .= '<option value="web" ' . selected((string) $filters['channel'], 'web', false) . '>Web</option>';
+        $html .= '<option value="pos" ' . selected((string) $filters['channel'], 'pos', false) . '>POS</option>';
+        $html .= '</select></label> ';
+        $html .= '<label>Event ID <input type="number" name="event_id" min="0" value="' . esc_attr((string) ($filters['event_id'] ?? 0)) . '" /></label> ';
+        $html .= '<button class="button">Filtrar</button>';
+        $html .= '</form>';
+
+        return $html;
+    }
+
+    /** @param array<string, mixed> $filters */
     private function render_filters_hidden_inputs(array $filters): string
     {
         $html = '';
@@ -471,6 +584,18 @@ final class AdminPages
         $html .= '<input type="hidden" name="date_to" value="' . esc_attr((string) $filters['date_to']) . '" />';
         $html .= '<input type="hidden" name="channel" value="' . esc_attr((string) $filters['channel']) . '" />';
         $html .= '<input type="hidden" name="market_id" value="' . esc_attr((string) $filters['market_id']) . '" />';
+
+        return $html;
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function render_event_filters_hidden_inputs(array $filters): string
+    {
+        $html = '';
+        $html .= '<input type="hidden" name="date_from" value="' . esc_attr((string) $filters['date_from']) . '" />';
+        $html .= '<input type="hidden" name="date_to" value="' . esc_attr((string) $filters['date_to']) . '" />';
+        $html .= '<input type="hidden" name="channel" value="' . esc_attr((string) $filters['channel']) . '" />';
+        $html .= '<input type="hidden" name="event_id" value="' . esc_attr((string) ($filters['event_id'] ?? 0)) . '" />';
 
         return $html;
     }

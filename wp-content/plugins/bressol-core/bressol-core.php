@@ -48,7 +48,7 @@ register_deactivation_hook(__FILE__, static function (): void {
     \Bressol\Modules\Pos\PosModule::clear_cron();
 });
 
-add_action('plugins_loaded', static function (): void {
+add_action('init', static function (): void {
     // Arranque central del plugin.
     $plugin = new \Bressol\Core\Plugin();
     $plugin->register();

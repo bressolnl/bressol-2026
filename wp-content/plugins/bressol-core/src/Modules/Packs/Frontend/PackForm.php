@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 namespace Bressol\Modules\Packs\Frontend;
 
+use Bressol\Modules\Inventory\Services\AuditLogger as InventoryAuditLogger;
+use Bressol\Modules\Inventory\Services\CacheService as InventoryCacheService;
+use Bressol\Modules\Inventory\Services\SellableService;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -39,6 +43,18 @@ final class PackForm
             return;
         }
 
+        $inventoryService = SellableService::build_default(new InventoryCacheService(), new InventoryAuditLogger());
+        $sellableHint = $inventoryService->get_pack_sellable_min($productId);
+        $hintLabel = 'Disponible según selección';
+        if ($sellableHint['known']) {
+            $minValue = (int) ($sellableHint['sellable_min'] ?? 0);
+            if ($minValue >= 1000000) {
+                $hintLabel = 'Stock orientativo: disponible';
+            } else {
+                $hintLabel = 'Stock orientativo: ' . $minValue . ' packs disponibles';
+            }
+        }
+
         // Prefill (upgrade): leer una vez
         $prefillSlot = isset($_GET['bressol_prefill_slot'])
             ? sanitize_text_field((string) $_GET['bressol_prefill_slot'])
@@ -49,7 +65,8 @@ final class PackForm
             : 0;
 
         echo '<div class="bressol-pack-form" style="margin:12px 0;padding:12px;border:1px solid #eee;">';
-        echo '<h4 style="margin:0 0 10px 0;">Personaliza tu pack</h4>';
+        echo '<h4 style="margin:0 0 6px 0;">Personaliza tu pack</h4>';
+        echo '<div style="margin:0 0 10px 0;color:#666;font-size:13px;">' . esc_html($hintLabel) . '</div>';
 
         foreach ($definition['slots'] as $slot) {
             if (!is_array($slot)) {

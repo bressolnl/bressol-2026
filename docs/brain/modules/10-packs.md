@@ -19,6 +19,32 @@ Contrato de datos
 - Cada slot: `key`, `label`, `required`, `min`, `max`, `options[]`.
 - Cada option: `product_id`, `label`, `surcharge`.
 
+Convencion de preseleccion (default)
+- Oficial: `default: true` en una option del slot.
+- Legacy compatible: `is_default` o `preselect` (se admiten pero se consideran legacy).
+- Si hay multiples defaults en un slot, se usa el primero y se registra alerta en auditoria.
+- Si el default es invalido (producto inexistente o id <=0), se aplica fallback.
+- Fallback tecnico: primera option valida del slot.
+- Fallback tecnico: recomendado definir default oficial para evitar ambiguedad.
+- El default no garantiza stock; la validacion de stock ocurre al vender.
+
+Ejemplo minimo (slot simple con default)
+{
+  "slots": [
+    {
+      "key": "oil",
+      "label": "Elige 1 aceite",
+      "required": true,
+      "min": 1,
+      "max": 1,
+      "options": [
+        { "product_id": 68, "label": "Aceite (ID 68)", "surcharge": 0, "default": true },
+        { "product_id": 73, "label": "Aceite premium (ID 73)", "surcharge": 2 }
+      ]
+    }
+  ]
+}
+
 Flujo principal (PDP -> carrito)
 1) `PackForm` lee JSON y renderiza selects/qty.
 2) `PackCart::validateBeforeAddToCart` valida required/min/max.

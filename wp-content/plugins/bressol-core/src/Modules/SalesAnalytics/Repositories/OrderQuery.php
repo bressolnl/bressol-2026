@@ -32,6 +32,7 @@ final class OrderQuery
 
         $channel = isset($filters['channel']) ? (string) $filters['channel'] : 'all';
         $marketId = isset($filters['market_id']) ? (string) $filters['market_id'] : '';
+        $eventId = isset($filters['event_id']) ? (int) $filters['event_id'] : 0;
 
         $metaQuery = [
             'relation' => 'AND',
@@ -74,6 +75,14 @@ final class OrderQuery
                     'value' => 'pos',
                     'compare' => '!=',
                 ],
+            ];
+        }
+
+        if ($eventId > 0) {
+            $metaQuery[] = [
+                'key' => '_bressol_event_id',
+                'value' => (string) $eventId,
+                'compare' => '=',
             ];
         }
 

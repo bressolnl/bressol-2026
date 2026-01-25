@@ -5,7 +5,7 @@ if (!defined('ABSPATH')) {
 
 get_header();
 
-echo '<main class="bressol-main">';
+echo '<main id="main" class="bressol-main">';
 
 if (have_posts()) {
     while (have_posts()) {

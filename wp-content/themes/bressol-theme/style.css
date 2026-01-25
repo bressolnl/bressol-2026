@@ -111,11 +111,142 @@ body {
     color: var(--bressol-color-muted);
 }
 
+.bressol-hero {
+    background: linear-gradient(135deg, rgba(188, 175, 74, 0.12), rgba(246, 245, 242, 0.9));
+    border-top: 1px solid var(--bressol-border-soft);
+    border-bottom: 1px solid var(--bressol-border-soft);
+}
+
+.bressol-hero__inner {
+    display: flex;
+    align-items: center;
+    gap: var(--bressol-space-6);
+}
+
+.bressol-hero__content {
+    flex: 1 1 55%;
+}
+
+.bressol-hero__visual {
+    flex: 1 1 45%;
+    min-height: 220px;
+    border-radius: var(--bressol-radius-3);
+    background: radial-gradient(circle at top left, rgba(188, 175, 74, 0.35), transparent 55%),
+        linear-gradient(150deg, rgba(188, 175, 74, 0.18), rgba(255, 255, 255, 0.9));
+    border: 1px solid rgba(188, 175, 74, 0.25);
+    box-shadow: var(--bressol-shadow-1);
+}
+
+.bressol-hero--plp .bressol-hero__visual {
+    min-height: 180px;
+}
+
+.bressol-hero--pdp .bressol-hero__inner {
+    align-items: flex-start;
+}
+
+.bressol-pdp__hero {
+    gap: var(--bressol-space-6);
+}
+
+.bressol-pdp__media {
+    position: relative;
+    flex: 1 1 50%;
+}
+
+.bressol-pdp__summary {
+    flex: 1 1 50%;
+}
+
+.bressol-pdp__visual {
+    position: absolute;
+    inset: -12px;
+    border-radius: var(--bressol-radius-3);
+    background: radial-gradient(circle at top left, rgba(188, 175, 74, 0.25), transparent 55%),
+        linear-gradient(150deg, rgba(188, 175, 74, 0.14), rgba(255, 255, 255, 0.9));
+    border: 1px solid rgba(188, 175, 74, 0.25);
+    z-index: 0;
+}
+
+.bressol-pdp__media .woocommerce-product-gallery {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    width: 100%;
+}
+
+.bressol-pdp__summary .woocommerce-product-rating {
+    margin-top: 0;
+}
+
+.bressol-pdp__after .woocommerce-tabs {
+    margin-top: 0;
+}
+
+.bressol-hero .bressol-cta-panel {
+    margin-top: var(--bressol-space-sm);
+}
+
+.bressol-trust {
+    padding-top: var(--bressol-space-5);
+}
+
+.bressol-trust-bar {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--bressol-space-sm);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.bressol-trust-bar li {
+    padding: var(--bressol-space-sm) var(--bressol-space-md);
+    border-radius: var(--bressol-radius-2);
+    border: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-white);
+    font-size: var(--bressol-font-size-sm);
+}
+
+.bressol-prose {
+    max-width: 720px;
+    font-size: var(--bressol-font-size-3);
+    color: var(--bressol-color-muted);
+    line-height: 1.7;
+}
+
+.bressol-prose p {
+    margin: 0;
+}
+
+.bressol-prose p + p {
+    margin-top: var(--bressol-space-sm);
+}
+
+.bressol-prose ul,
+.bressol-prose ol {
+    margin: var(--bressol-space-sm) 0 0;
+    padding-left: var(--bressol-space-5);
+}
+
+.bressol-prose--faq {
+    max-width: 880px;
+}
+
 .bressol-link {
     text-decoration: none;
     color: inherit;
     border-bottom: 1px solid var(--bressol-color-accent);
-    transition: border-color 0.2s ease;
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.bressol-link:visited {
+    color: var(--bressol-color-text);
+}
+
+.bressol-link:hover {
+    color: var(--bressol-color-accent-hover);
+    border-bottom-color: var(--bressol-color-accent-hover);
 }
 
 .bressol-link:focus-visible {
@@ -174,15 +305,16 @@ body {
 .bressol-card {
     border: 1px solid var(--bressol-border-soft);
     border-radius: var(--bressol-radius-sm);
-    padding: var(--bressol-space-md);
-    background: var(--bressol-white);
-    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+    padding: var(--bressol-space-5);
+    background: linear-gradient(180deg, #FFFFFF 0%, #FBFAF7 100%);
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .bressol-card:hover,
 .bressol-card:focus-within {
-    box-shadow: var(--bressol-shadow-sm);
+    box-shadow: var(--bressol-shadow-2);
     transform: translateY(-2px);
+    border-color: rgba(7, 12, 12, 0.2);
 }
 
 .bressol-card__link:focus-visible {
@@ -207,6 +339,20 @@ body {
     font-size: var(--bressol-font-size-sm);
 }
 
+.bressol-card__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--bressol-space-1);
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--bressol-color-accent-soft);
+    border: 1px solid rgba(188, 175, 74, 0.4);
+    font-size: var(--bressol-font-size-1);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: var(--bressol-space-sm);
+}
+
 .bressol-form-shell {
     padding: var(--bressol-space-6);
     border-radius: var(--bressol-radius-sm);
@@ -218,10 +364,11 @@ body {
 .bressol-faq {
     display: grid;
     gap: var(--bressol-space-md);
+    border-top: 1px solid var(--bressol-border-soft);
 }
 
 .bressol-faq__item {
-    padding-bottom: var(--bressol-space-md);
+    padding: var(--bressol-space-md) 0;
     border-bottom: 1px solid var(--bressol-border-soft);
 }
 
@@ -258,11 +405,24 @@ body {
     border: 1px solid var(--bressol-color-accent);
     background: var(--bressol-color-accent-soft);
     color: var(--bressol-color-text);
-    transition: box-shadow 0.2s ease;
+    transition: box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 .bressol-button:hover {
     box-shadow: var(--bressol-shadow-1);
+    border-color: var(--bressol-color-accent-hover);
+}
+
+.bressol-button:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+.bressol-button:disabled,
+.bressol-button[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+    box-shadow: none;
 }
 
 .bressol-button:focus-visible {
@@ -279,6 +439,28 @@ body {
 .bressol-site-header {
     border-bottom: 1px solid var(--bressol-border-soft);
     background: var(--bressol-white);
+}
+
+.bressol-skip-link {
+    position: absolute;
+    left: var(--bressol-space-sm);
+    top: var(--bressol-space-sm);
+    padding: 10px 14px;
+    border-radius: var(--bressol-radius-sm);
+    background: var(--bressol-white);
+    color: var(--bressol-color-text);
+    text-decoration: none;
+    border: 1px solid var(--bressol-border-soft);
+    box-shadow: var(--bressol-shadow-1);
+    transform: translateY(-200%);
+    transition: transform 0.2s ease;
+    z-index: 100;
+}
+
+.bressol-skip-link:focus-visible {
+    transform: translateY(0);
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
 }
 
 .bressol-site-footer {
@@ -308,6 +490,30 @@ body {
     gap: var(--bressol-space-sm);
 }
 
+.bressol-header-cta {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: var(--bressol-radius-sm);
+    border: 1px solid var(--bressol-border-soft);
+    text-decoration: none;
+    font-size: var(--bressol-font-size-sm);
+    color: var(--bressol-color-text);
+    background: var(--bressol-gray-100);
+    transition: border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bressol-header-cta:hover {
+    border-color: var(--bressol-color-accent-hover);
+    color: var(--bressol-color-accent-hover);
+    box-shadow: var(--bressol-shadow-1);
+}
+
+.bressol-header-cta:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
+}
+
 .bressol-site-header__icon {
     width: 40px;
     height: 40px;
@@ -318,6 +524,10 @@ body {
     align-items: center;
     justify-content: center;
     cursor: pointer;
+}
+
+.bressol-site-header__icon:hover {
+    border-color: var(--bressol-color-accent-hover);
 }
 
 .bressol-site-header__icon:focus-visible {
@@ -396,6 +606,7 @@ body {
 .woocommerce input.button:hover,
 .woocommerce #respond input#submit:hover {
     box-shadow: var(--bressol-shadow-1);
+    border-color: var(--bressol-color-accent-hover);
 }
 
 .woocommerce a.button:focus-visible,
@@ -428,6 +639,13 @@ body {
     border: 1px solid var(--bressol-border-soft);
     border-radius: var(--bressol-radius-sm);
     background: var(--bressol-white);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.woocommerce ul.products li.product:hover,
+.woocommerce ul.products li.product:focus-within {
+    box-shadow: var(--bressol-shadow-1);
+    border-color: rgba(7, 12, 12, 0.2);
 }
 
 .woocommerce div.product .product_title {
@@ -467,6 +685,31 @@ body {
         flex-wrap: wrap;
     }
 
+    .bressol-hero__inner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .bressol-hero__visual {
+        width: 100%;
+        min-height: 160px;
+    }
+
+    .bressol-pdp__visual {
+        inset: -8px;
+    }
+
+    .bressol-hero .bressol-cta-panel {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .bressol-header-cta {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+    }
+
     .bressol-nav__list {
         flex-wrap: wrap;
         width: 100%;
@@ -501,6 +744,12 @@ body {
     padding: 12px 16px;
     font-size: var(--bressol-font-size-md);
     cursor: pointer;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.bressol-search-submit:hover {
+    box-shadow: var(--bressol-shadow-1);
+    border-color: var(--bressol-color-accent-hover);
 }
 
 .bressol-search-submit:focus-visible {
@@ -541,10 +790,21 @@ body {
     border: 1px solid var(--bressol-color-accent);
     color: var(--bressol-color-text);
     background: transparent;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .woocommerce-mini-cart__buttons a.checkout {
     background: var(--bressol-color-accent-soft);
+}
+
+.woocommerce-mini-cart__buttons a:hover {
+    box-shadow: var(--bressol-shadow-1);
+    border-color: var(--bressol-color-accent-hover);
+}
+
+.woocommerce-mini-cart__buttons a:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
 }
 
 input[type="text"],

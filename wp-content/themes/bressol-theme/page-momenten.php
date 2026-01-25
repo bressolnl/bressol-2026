@@ -9,6 +9,7 @@ if (!defined('ABSPATH')) {
 get_header();
 
 $advies_link = bressol_get_page_link('advies', '/');
+$pakketten_link = bressol_get_page_link('pakketten', '/');
 $moments = get_terms([
     'taxonomy' => 'bressol_moment',
     'hide_empty' => false,
@@ -34,22 +35,40 @@ if (!is_wp_error($moments) && !empty($moments)) {
 ?>
 
 <main class="bressol-main">
-    <section class="bressol-section">
+    <section class="bressol-section bressol-hero bressol-hero--plp">
+        <div class="bressol-container bressol-hero__inner">
+            <div class="bressol-hero__content">
+                <h1 class="bressol-title"><?php esc_html_e('Momenten met mediterrane flair.', 'bressol-theme'); ?></h1>
+                <p class="bressol-lead">
+                    <?php esc_html_e('Van borrel tot cadeau en tafel: ontdek selecties die passen bij de sfeer van het moment.', 'bressol-theme'); ?>
+                </p>
+                <div class="bressol-cta-panel">
+                    <a class="bressol-button" href="<?php echo esc_url($advies_link); ?>">
+                        <?php esc_html_e('Start met advies', 'bressol-theme'); ?>
+                    </a>
+                    <a class="bressol-link" href="<?php echo esc_url($pakketten_link); ?>">
+                        <?php esc_html_e('Bekijk pakketten', 'bressol-theme'); ?>
+                    </a>
+                </div>
+            </div>
+            <div class="bressol-hero__visual" aria-hidden="true"></div>
+        </div>
+    </section>
+
+    <section class="bressol-section bressol-trust">
         <div class="bressol-container">
-            <h1 class="bressol-title"><?php esc_html_e('Momenten', 'bressol-theme'); ?></h1>
-            <p class="bressol-lead">
-                <?php esc_html_e('Ontdek welke selectie past bij het moment dat je wilt vieren.', 'bressol-theme'); ?>
-            </p>
-            <p>
-                <a class="bressol-link" href="<?php echo esc_url($advies_link); ?>">
-                    <?php esc_html_e('Liever advies op maat?', 'bressol-theme'); ?>
-                </a>
-            </p>
+            <h2 class="bressol-section-title"><?php esc_html_e('Kies met vertrouwen', 'bressol-theme'); ?></h2>
+            <ul class="bressol-trust-bar">
+                <li><?php esc_html_e('Herkomst met karakter', 'bressol-theme'); ?></li>
+                <li><?php esc_html_e('Ambachtelijke selectie', 'bressol-theme'); ?></li>
+                <li><?php esc_html_e('Smaak in balans', 'bressol-theme'); ?></li>
+            </ul>
         </div>
     </section>
 
     <section class="bressol-section">
         <div class="bressol-container">
+            <h2 class="bressol-section-title"><?php esc_html_e('Voor elk moment', 'bressol-theme'); ?></h2>
             <?php if (!is_wp_error($moments) && !empty($moments)) : ?>
                 <div class="bressol-grid">
                     <?php foreach ($moments as $moment) : ?>
@@ -62,16 +81,35 @@ if (!is_wp_error($moments) && !empty($moments)) {
                                 </a>
                             </h2>
                             <p class="bressol-card__meta">
-                                <?php echo esc_html($moment_desc ?: esc_html__('Een selectie met karakter en balans.', 'bressol-theme')); ?>
+                                <?php echo esc_html($moment_desc ?: esc_html__('Een selectie met mediterrane nuance en balans.', 'bressol-theme')); ?>
                             </p>
                         </article>
                     <?php endforeach; ?>
                 </div>
             <?php else : ?>
                 <p class="bressol-empty">
-                    <?php esc_html_e('Er zijn nog geen momenten toegevoegd.', 'bressol-theme'); ?>
+                    <?php esc_html_e('Er zijn nog geen momenten beschikbaar. Start met advies voor een selectie op maat.', 'bressol-theme'); ?>
+                </p>
+                <p>
+                    <a class="bressol-link" href="<?php echo esc_url($advies_link); ?>">
+                        <?php esc_html_e('Start met advies', 'bressol-theme'); ?>
+                    </a>
                 </p>
             <?php endif; ?>
+        </div>
+    </section>
+
+    <section class="bressol-section">
+        <div class="bressol-container">
+            <div class="bressol-cta-panel">
+                <div>
+                    <h2 class="bressol-section-title"><?php esc_html_e('Hulp nodig bij kiezen?', 'bressol-theme'); ?></h2>
+                    <p class="bressol-lead"><?php esc_html_e('We helpen je graag met advies dat past bij jouw moment.', 'bressol-theme'); ?></p>
+                </div>
+                <a class="bressol-button" href="<?php echo esc_url($advies_link); ?>">
+                    <?php esc_html_e('Start met advies', 'bressol-theme'); ?>
+                </a>
+            </div>
         </div>
     </section>
 </main>

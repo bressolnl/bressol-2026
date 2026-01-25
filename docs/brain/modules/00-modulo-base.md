@@ -19,9 +19,14 @@ Hooks de activacion y desactivacion
   - CRM: `CrmModule::clear_cron()`
   - POS: `PosModule::clear_cron()`
 
+Instaladores y upgrades (admin_init / WP-CLI)
+- POS: `Installer::maybe_upgrade()` (tablas de opened items).
+- MarketsEvents: `Installer::maybe_upgrade()` (tabla `bressol_events` + migraciones).
+- Forecasting: `Installer::maybe_upgrade()` (tabla `bressol_forecast_snapshots`).
+
 Como agregar un modulo nuevo
 1) Crear carpeta en `src/Modules/NuevoModulo`.
 2) Crear clase `NuevoModuloModule` que implemente `ModuleInterface`.
 3) Instanciar en `Plugin::bootModules()`.
-4) Si hay cron o tablas, registrar en activation hook.
+4) Si hay cron o tablas, registrar en activation hook o en `admin_init` segun modulo.
 5) Documentar en `docs/brain/modules/`.

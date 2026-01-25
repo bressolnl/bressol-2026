@@ -204,6 +204,7 @@ final class PosModule implements ModuleInterface
         $settings = new PosSettings();
         $auditLogger = class_exists(AuditLogger::class) ? new AuditLogger() : null;
         $marketId = isset($_POST['market_id']) ? sanitize_text_field(wp_unslash($_POST['market_id'])) : '';
+        $explicitEventId = isset($_POST['event_id']) ? absint($_POST['event_id']) : 0;
         $customerId = isset($_POST['customer_id']) ? absint($_POST['customer_id']) : 0;
         $itemsRaw = isset($_POST['items']) ? wp_unslash($_POST['items']) : '[]';
         $items = json_decode((string) $itemsRaw, true);
@@ -211,10 +212,13 @@ final class PosModule implements ModuleInterface
         $loyaltyOptIn = isset($_POST['loyalty_opt_in']) && wp_unslash($_POST['loyalty_opt_in']) === 'yes' ? 'yes' : 'no';
         $marketingOptIn = isset($_POST['marketing_opt_in']) && wp_unslash($_POST['marketing_opt_in']) === 'yes' ? 'yes' : 'no';
 
-        if ($marketId === '') {
+        if ($marketId === '' && $explicitEventId <= 0) {
             $this->send_pos_error('pos_invalid_market', 'Mercado obligatorio.', 422);
         }
 
+        if ($explicitEventId > 0) {
+            $marketId = 'event:' . $explicitEventId;
+        }
         $resolver = new PosMarketResolver($settings);
         try {
             $resolvedMarket = $resolver->resolve($marketId);
@@ -233,12 +237,17 @@ final class PosModule implements ModuleInterface
         $sellableService = SellableService::build_default(new InventoryCacheService(), new InventoryAuditLogger());
         $validatedItems = [];
         $itemsTotalCents = 0;
+        // Expected POS items payload:
+        // - product_id (int)
+        // - qty (int)
+        // - pack_selection (optional): { "<product_id>": <qty>, ... }
         foreach ($items as $item) {
             if (!is_array($item)) {
                 continue;
             }
             $productId = isset($item['product_id']) ? (int) $item['product_id'] : 0;
             $qty = isset($item['qty']) ? (int) $item['qty'] : 0;
+            $packSelection = $item['pack_selection'] ?? null;
             if ($productId <= 0 || $qty < 1) {
                 continue;
             }
@@ -246,10 +255,11 @@ final class PosModule implements ModuleInterface
             if (!$product) {
                 continue;
             }
-            if (!$sellableService->is_sellable($productId, $qty)) {
+            $selection = is_array($packSelection) ? $packSelection : null;
+            if (!$sellableService->is_sellable($productId, $qty, $selection)) {
                 $name = $product->get_name();
                 $message = $name !== '' ? ('Stock insuficiente: ' . $name . '.') : 'Stock insuficiente.';
-                $sellableService->log_blocked('pos_create_order', $productId, $qty);
+                $sellableService->log_blocked('pos_create_order', $productId, $qty, $selection);
                 $this->send_pos_error('pos_stock_insufficient', $message, 422);
             }
             $priceCents = (int) round(((float) $product->get_price()) * 100);

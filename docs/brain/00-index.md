@@ -32,13 +32,23 @@ Arbol de conocimiento
 - `docs/brain/modules/17-pos.md`
 - `docs/brain/modules/18-sales-analytics.md`
 - `docs/brain/modules/19-inventory.md`
+<<<<<<< Updated upstream
 - `docs/brain/modules/19-markets-events-calendar.md`
 - `docs/brain/modules/20-seo-pdp.md`
+=======
+- `docs/brain/modules/19-markets-events-calendar.md` (legacy)
+- `docs/brain/modules/20-markets-events.md`
+- `docs/brain/modules/20-seo-pdp.md`
+- `docs/brain/modules/21-forecasting.md`
+>>>>>>> Stashed changes
 
 5) Theme
 - `docs/brain/theme/00-bressol-theme.md`
 
-6) Operativa (cron, CLI, jobs)
+6) UI
+- `docs/brain/ui/00-navigation.md`
+
+7) Operativa (cron, CLI, jobs)
 - `docs/brain/ops/00-cron-y-cli.md`
 - `docs/brain/ops/01-consent-cmp.md`
 - `docs/brain/ops/02-qa-canonical.md`

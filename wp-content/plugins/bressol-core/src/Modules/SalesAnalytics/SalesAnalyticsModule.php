@@ -26,6 +26,8 @@ final class SalesAnalyticsModule implements ModuleInterface
     private const EXPORT_DAILY_MAX_DAYS = 60;
     private const EXPORT_DAILY_MAX_COUNT = 5000;
     private const EXPORT_DISCREPANCIES_MAX_COUNT = 2000;
+    private const EXPORT_EVENTS_MAX_DAYS = 180;
+    private const EXPORT_EVENTS_MAX_COUNT = 20000;
 
     private Capabilities $capabilities;
     private Settings $settings;
@@ -52,6 +54,7 @@ final class SalesAnalyticsModule implements ModuleInterface
         add_action('admin_post_bressol_sales_export_orders', [$this, 'handleExportOrders']);
         add_action('admin_post_bressol_sales_export_daily', [$this, 'handleExportDaily']);
         add_action('admin_post_bressol_sales_export_discrepancies', [$this, 'handleExportDiscrepancies']);
+        add_action('admin_post_bressol_sales_export_events', [$this, 'handleExportEvents']);
         add_action('woocommerce_order_status_changed', [$this, 'handleOrderStatusChanged'], 10, 4);
         add_action('woocommerce_order_refunded', [$this, 'handleOrderRefunded'], 10, 2);
 
@@ -177,6 +180,42 @@ final class SalesAnalyticsModule implements ModuleInterface
         }
     }
 
+    public function handleExportEvents(): void
+    {
+        if (!$this->capabilities->current_user_can_view()) {
+            $this->log_events_export_blocked([], 'permission');
+            $this->redirect_export_error('forbidden');
+        }
+
+        $nonce = isset($_POST['_wpnonce']) ? sanitize_text_field(wp_unslash($_POST['_wpnonce'])) : '';
+        if (!wp_verify_nonce($nonce, 'bressol_sales_export_events_nonce')) {
+            $filters = $this->sanitize_event_filters_from_request($_POST);
+            $this->log_events_export_blocked($filters, 'nonce');
+            $this->redirect_export_error('invalid_nonce');
+        }
+
+        $filters = $this->sanitize_event_filters_from_request($_POST);
+        $this->log_events_export_attempted($filters);
+
+        if ($this->is_rate_limited('events')) {
+            $this->log_events_export_blocked($filters, 'rate_limit');
+            $this->redirect_export_error('rate_limited');
+        }
+
+        if ($this->is_events_export_too_large($filters)) {
+            $this->log_events_export_blocked($filters, 'range_too_large');
+            $this->redirect_export_error('range_too_large');
+        }
+
+        try {
+            $this->exportService->stream_events_csv($filters);
+            exit;
+        } catch (\Throwable $exception) {
+            $this->log_events_export_exception($filters, $exception);
+            wp_die('No se pudo completar la exportación.');
+        }
+    }
+
     /** @param array<string, mixed> $input */
     private function sanitize_filters_from_request(array $input): array
     {
@@ -190,6 +229,24 @@ final class SalesAnalyticsModule implements ModuleInterface
             'date_to' => $this->sanitize_date($to),
             'channel' => $this->sanitize_channel($channel),
             'market_id' => $marketId,
+        ];
+    }
+
+    /** @param array<string, mixed> $input
+     *  @return array<string, mixed>
+     */
+    private function sanitize_event_filters_from_request(array $input): array
+    {
+        $from = isset($input['date_from']) ? sanitize_text_field(wp_unslash($input['date_from'])) : '';
+        $to = isset($input['date_to']) ? sanitize_text_field(wp_unslash($input['date_to'])) : '';
+        $channel = isset($input['channel']) ? sanitize_text_field(wp_unslash($input['channel'])) : 'all';
+        $eventId = isset($input['event_id']) ? absint($input['event_id']) : 0;
+
+        return [
+            'date_from' => $this->sanitize_date($from),
+            'date_to' => $this->sanitize_date($to),
+            'channel' => $this->sanitize_channel($channel),
+            'event_id' => $eventId,
         ];
     }
 
@@ -269,6 +326,15 @@ final class SalesAnalyticsModule implements ModuleInterface
         return $this->estimate_orders_count($filters, self::EXPORT_DAILY_MAX_COUNT + 1) > self::EXPORT_DAILY_MAX_COUNT;
     }
 
+    private function is_events_export_too_large(array $filters): bool
+    {
+        if ($this->is_date_range_over_limit($filters, self::EXPORT_EVENTS_MAX_DAYS)) {
+            return true;
+        }
+
+        return $this->estimate_orders_count($filters, self::EXPORT_EVENTS_MAX_COUNT + 1) > self::EXPORT_EVENTS_MAX_COUNT;
+    }
+
     private function is_date_range_over_limit(array $filters, int $limitDays): bool
     {
         $from = isset($filters['date_from']) ? (string) $filters['date_from'] : '';
@@ -317,6 +383,8 @@ final class SalesAnalyticsModule implements ModuleInterface
             $action = 'sales_export_daily_attempted';
         } elseif ($type === 'discrepancies') {
             $action = 'sales_export_discrepancies_attempted';
+        } elseif ($type === 'events') {
+            $action = 'sales_export_events_attempted';
         } else {
             $action = 'sales_export_orders_attempted';
         }
@@ -338,6 +406,46 @@ final class SalesAnalyticsModule implements ModuleInterface
             'include_pii' => $includePii,
             'result' => 'blocked',
             'reason' => $reason,
+            'request_uri' => $this->get_request_uri(),
+        ]);
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function log_events_export_attempted(array $filters): void
+    {
+        $this->auditLogger->log('sales_export_events_attempted', [
+            'export_type' => 'events',
+            'filters' => $filters,
+            'include_pii' => false,
+            'result' => 'attempted',
+            'request_uri' => $this->get_request_uri(),
+        ]);
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function log_events_export_blocked(array $filters, string $reason): void
+    {
+        $this->auditLogger->log('sales_export_events_blocked', [
+            'export_type' => 'events',
+            'filters' => $filters,
+            'include_pii' => false,
+            'result' => 'blocked',
+            'reason' => $reason,
+            'request_uri' => $this->get_request_uri(),
+        ]);
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function log_events_export_exception(array $filters, \Throwable $exception): void
+    {
+        $this->auditLogger->log('sales_export_events_failed', [
+            'export_type' => 'events',
+            'filters' => $filters,
+            'include_pii' => false,
+            'result' => 'error',
+            'reason' => 'exception',
+            'exception_class' => get_class($exception),
+            'message_truncated' => $exception->getMessage(),
             'request_uri' => $this->get_request_uri(),
         ]);
     }

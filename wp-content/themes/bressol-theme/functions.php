@@ -54,6 +54,188 @@ add_action('wp_head', function () {
     echo '<link rel="canonical" href="' . esc_url($link) . '" />';
 }, 2);
 
+if (!function_exists('bressol_schema_is_seo_plugin_active')) {
+    function bressol_schema_is_seo_plugin_active(): bool
+    {
+        return defined('RANK_MATH_VERSION')
+            || class_exists('RankMath\\Helper')
+            || defined('WPSEO_VERSION')
+            || class_exists('WPSEO_Frontend');
+    }
+}
+
+if (!function_exists('bressol_schema_normalize_text')) {
+    function bressol_schema_normalize_text(string $text): string
+    {
+        $text = preg_replace('/\s+/u', ' ', trim($text));
+        return $text ?? '';
+    }
+}
+
+if (!function_exists('bressol_schema_get_faq_items_from_context')) {
+    /** @return array<int, array{question:string, answer:string}> */
+    function bressol_schema_get_faq_items_from_context(): array
+    {
+        if (!function_exists('is_tax') || (!is_tax('product_cat') && !is_tax('bressol_moment'))) {
+            return [];
+        }
+
+        $term_id = get_queried_object_id();
+        if (!$term_id) {
+            return [];
+        }
+
+        $meta_key = is_tax('product_cat') ? 'bressol_cat_faq' : 'bressol_moment_faq';
+        $faq_raw = (string) get_term_meta($term_id, $meta_key, true);
+        if ($faq_raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($faq_raw, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $allowed_tags = [
+            'br' => [],
+            'p' => [],
+            'strong' => [],
+            'em' => [],
+            'ul' => [],
+            'ol' => [],
+            'li' => [],
+        ];
+
+        $items = [];
+        $seen = [];
+        foreach ($decoded as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $question_raw = (string) ($item['q'] ?? '');
+            $answer_raw = (string) ($item['a'] ?? '');
+
+            $question = bressol_schema_normalize_text(wp_strip_all_tags($question_raw));
+            $answer = bressol_schema_normalize_text(wp_kses($answer_raw, $allowed_tags));
+
+            if ($question === '' || $answer === '') {
+                continue;
+            }
+
+            $key = mb_strtolower($question);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $items[] = [
+                'question' => $question,
+                'answer' => $answer,
+            ];
+        }
+
+        return $items;
+    }
+}
+
+if (!function_exists('bressol_schema_should_print_faq')) {
+    function bressol_schema_should_print_faq(): bool
+    {
+        if (is_admin() || bressol_schema_is_seo_plugin_active()) {
+            return false;
+        }
+
+        $items = bressol_schema_get_faq_items_from_context();
+        return !empty($items);
+    }
+}
+
+if (!function_exists('bressol_schema_should_print_org')) {
+    function bressol_schema_should_print_org(): bool
+    {
+        return !is_admin() && !bressol_schema_is_seo_plugin_active();
+    }
+}
+
+if (!function_exists('bressol_schema_should_print_website')) {
+    function bressol_schema_should_print_website(): bool
+    {
+        return !is_admin() && !bressol_schema_is_seo_plugin_active();
+    }
+}
+
+if (!function_exists('bressol_schema_print_jsonld')) {
+    /** @param array<string, mixed> $data */
+    function bressol_schema_print_jsonld(array $data): void
+    {
+        $json = wp_json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (!$json) {
+            return;
+        }
+        echo "\n<script type=\"application/ld+json\">{$json}</script>\n";
+    }
+}
+
+add_action('wp_head', function () {
+    if (bressol_schema_should_print_org()) {
+        $org = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Organization',
+            'name' => 'Bressol',
+            'url' => home_url('/'),
+        ];
+
+        $logo_id = (int) get_theme_mod('custom_logo');
+        if ($logo_id) {
+            $logo_url = wp_get_attachment_image_url($logo_id, 'full');
+            if ($logo_url) {
+                $org['logo'] = $logo_url;
+            }
+        }
+
+        bressol_schema_print_jsonld($org);
+    }
+
+    if (bressol_schema_should_print_website()) {
+        $website = [
+            '@context' => 'https://schema.org',
+            '@type' => 'WebSite',
+            'name' => 'Bressol',
+            'url' => home_url('/'),
+            'potentialAction' => [
+                '@type' => 'SearchAction',
+                'target' => home_url('/?s={search_term_string}'),
+                'query-input' => 'required name=search_term_string',
+            ],
+        ];
+
+        bressol_schema_print_jsonld($website);
+    }
+
+    if (bressol_schema_should_print_faq()) {
+        $items = bressol_schema_get_faq_items_from_context();
+        $entities = [];
+        foreach ($items as $item) {
+            $entities[] = [
+                '@type' => 'Question',
+                'name' => $item['question'],
+                'acceptedAnswer' => [
+                    '@type' => 'Answer',
+                    'text' => $item['answer'],
+                ],
+            ];
+        }
+
+        if ($entities !== []) {
+            bressol_schema_print_jsonld([
+                '@context' => 'https://schema.org',
+                '@type' => 'FAQPage',
+                'mainEntity' => $entities,
+            ]);
+        }
+    }
+}, 30);
+
 if (!function_exists('bressol_get_page_link')) {
     function bressol_get_page_link(string $slug, string $fallback = '/'): string
     {
