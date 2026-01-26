@@ -204,7 +204,7 @@ final class Actions
     public function handle_planning_run(): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
-            $this->redirect_with_notice('bressol-purchasing-planning', 'forbidden');
+            $this->redirect_with_notice('bressol_purchasing_planning', 'forbidden');
         }
 
         check_admin_referer('bressol_purchasing_planning_run');
@@ -216,10 +216,10 @@ final class Actions
             $service = PurchasingModule::build_planning_service();
             $service->run($dryRun);
         } catch (\Throwable $exception) {
-            $this->redirect_with_notice('bressol-purchasing-planning', 'planning_run_failed');
+            $this->redirect_with_notice('bressol_purchasing_planning', 'planning_run_failed');
         }
 
-        $this->redirect_with_notice('bressol-purchasing-planning', 'planning_run_ok');
+        $this->redirect_with_notice('bressol_purchasing_planning', 'planning_run_ok');
     }
 
     public function handle_diagnostics_planning_run(): void

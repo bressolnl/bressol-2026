@@ -22,6 +22,7 @@ final class AdminPages
     private const PAGE_POS = 'bressol_purchasing_pos';
     private const PAGE_RECEIVINGS = 'bressol_purchasing_receivings';
     private const PAGE_DIAGNOSTICS = 'bressol_purchasing_diagnostics';
+    private const PAGE_PLANNING = 'bressol_purchasing_planning';
 
     private Capabilities $capabilities;
 
@@ -75,7 +76,7 @@ final class AdminPages
             'Purchase Planning',
             'Purchase Planning',
             $capability,
-            'bressol-purchasing-planning',
+            self::PAGE_PLANNING,
             [$this, 'renderPurchasePlanningPage']
         );
 
@@ -189,6 +190,10 @@ final class AdminPages
     public function renderPurchasePlanningPage(): void
     {
         $this->assert_can_manage();
+
+        $page = isset($_GET['page']) ? sanitize_text_field(wp_unslash($_GET['page'])) : '';
+        $this->redirect_if_legacy_page(['bressol-purchasing-planning'], self::PAGE_PLANNING);
+        $this->render_tabs($page);
 
         $settings = new Settings();
         $planningService = PurchasingModule::build_planning_service();
@@ -1084,6 +1089,7 @@ final class AdminPages
             self::PAGE_SUPPLIERS => 'Suppliers',
             self::PAGE_POS => 'Purchase Orders',
             self::PAGE_RECEIVINGS => 'Receivings',
+            self::PAGE_PLANNING => 'Planning',
             self::PAGE_DIAGNOSTICS => 'Diagnostics',
         ];
 
