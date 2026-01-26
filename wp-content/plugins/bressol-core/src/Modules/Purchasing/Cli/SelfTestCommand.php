@@ -33,5 +33,20 @@ final class SelfTestCommand
         \WP_CLI::log('Settings: purchasing_enabled=' . ($settings['purchasing_enabled'] ? 'true' : 'false'));
         \WP_CLI::log('Settings: purchasing_cron_enabled=' . ($settings['purchasing_cron_enabled'] ? 'true' : 'false'));
         \WP_CLI::log('Settings: purchase_planning_enabled=' . ($settings['purchase_planning_enabled'] ? 'true' : 'false'));
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_suppliers';
+        $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        \WP_CLI::log('Table suppliers: ' . ($exists ? 'ok' : 'missing'));
+
+        $roles = function_exists('wp_roles') ? wp_roles() : null;
+        $role = $roles ? $roles->get_role('administrator') : null;
+        $hasCap = $role ? $role->has_cap($this->capabilities->get_sensitive_capability()) : false;
+        \WP_CLI::log('Cap exists: ' . ($hasCap ? 'true' : 'false'));
+
+        if ($exists) {
+            $count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
+            \WP_CLI::log('Suppliers count: ' . $count);
+        }
     }
 }

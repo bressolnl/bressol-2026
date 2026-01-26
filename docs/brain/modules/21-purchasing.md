@@ -34,3 +34,8 @@ Dependencias de datos:
 - MarketsEvents (eventos pasados y futuros en la ventana)
 
 La logica de recomendacion se implementara en el servicio `PurchasePlanningService` y en puertos de lectura para integrar esos modulos.
+
+## Suppliers MVP (v0.1)
+Campos: supplier_code, name, lead_time_days, min_order_cents (nullable), notes (sin PII).
+Validaciones basicas: code uppercase [A-Z0-9_-] (2..32), name 2..120, lead_time 0..365, MOQ >= 0 si existe, notes max 2000 sin HTML.
+No se implementa delete para evitar inconsistencias futuras con POs (pendiente de integridad referencial).
