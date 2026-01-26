@@ -8,6 +8,7 @@ use Bressol\Modules\Purchasing\Domain\Enum\Status;
 use Bressol\Modules\Purchasing\Repositories\PurchaseOrderRepository;
 use Bressol\Modules\Purchasing\Repositories\ReceivingRepository;
 use Bressol\Modules\Purchasing\Repositories\SupplierRepository;
+use Bressol\Modules\Purchasing\Services\Settings;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -524,6 +525,8 @@ final class AdminPages
         if ($poId > 0) {
             echo '<h2>Receivings</h2>';
             $this->render_po_receivings_summary($poId, $lines, $receivedTotals);
+            $syncEnabled = (new Settings())->is_purchasing_stock_sync_enabled();
+            echo '<p class="description">Stock sync: ' . esc_html($syncEnabled ? 'ON' : 'OFF') . '</p>';
             $addUrl = add_query_arg([
                 'page' => 'bressol-purchasing-receivings',
                 'view' => 'add',

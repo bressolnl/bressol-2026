@@ -9,6 +9,7 @@ use Bressol\Modules\Purchasing\Services\AuditLogger;
 use Bressol\Modules\Purchasing\Services\Ports\NullAdapters\NullCostLedgerWritePort;
 use Bressol\Modules\Purchasing\Repositories\PurchaseOrderRepository;
 use Bressol\Modules\Purchasing\Repositories\ReceivingRepository;
+use Bressol\Modules\Purchasing\PurchasingModule;
 use Bressol\Modules\Purchasing\Services\PurchaseOrderService;
 use Bressol\Modules\Purchasing\Services\ReceivingService;
 use Bressol\Modules\Purchasing\Services\SupplierService;
@@ -183,7 +184,8 @@ final class Actions
         $service = new ReceivingService(
             new ReceivingRepository(),
             new PurchaseOrderRepository(),
-            new AuditLogger()
+            new AuditLogger(),
+            PurchasingModule::build_stock_sync_service()
         );
         $result = $service->create_receiving($poId, $receivedAtUtc ?: null, is_string($note) ? $note : null, $lines);
 

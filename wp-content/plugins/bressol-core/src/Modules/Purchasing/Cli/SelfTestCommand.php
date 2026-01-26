@@ -33,6 +33,7 @@ final class SelfTestCommand
         \WP_CLI::log('Settings: purchasing_enabled=' . ($settings['purchasing_enabled'] ? 'true' : 'false'));
         \WP_CLI::log('Settings: purchasing_cron_enabled=' . ($settings['purchasing_cron_enabled'] ? 'true' : 'false'));
         \WP_CLI::log('Settings: purchase_planning_enabled=' . ($settings['purchase_planning_enabled'] ? 'true' : 'false'));
+        \WP_CLI::log('Settings: purchasing_stock_sync_enabled=' . (!empty($settings['purchasing_stock_sync_enabled']) ? 'true' : 'false'));
 
         global $wpdb;
         $table = $wpdb->prefix . 'bressol_suppliers';
@@ -78,6 +79,12 @@ final class SelfTestCommand
             $count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$receivingLinesTable}");
             \WP_CLI::log('Receiving lines count: ' . $count);
         }
+
+        $like = '%' . $wpdb->esc_like('bressol_purchasing_once_receiving_stock_') . '%';
+        $onceCount = (int) $wpdb->get_var(
+            $wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s", $like)
+        );
+        \WP_CLI::log('Stock sync idempotency markers: ' . $onceCount);
 
         if ($poExists && $poLinesExists && $receivingsExists && $receivingLinesExists) {
             $samplePoId = (int) $wpdb->get_var("SELECT id FROM {$poTable} ORDER BY id DESC LIMIT 1");

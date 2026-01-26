@@ -18,6 +18,7 @@ final class Settings
             'purchasing_enabled' => false,
             'purchasing_cron_enabled' => false,
             'purchase_planning_enabled' => false,
+            'purchasing_stock_sync_enabled' => false,
         ];
 
         $stored = get_option(self::OPTION_NAME, []);
@@ -46,6 +47,12 @@ final class Settings
         return !empty($settings['purchase_planning_enabled']);
     }
 
+    public function is_purchasing_stock_sync_enabled(): bool
+    {
+        $settings = $this->get();
+        return !empty($settings['purchasing_stock_sync_enabled']);
+    }
+
     public function update(array $payload): void
     {
         $settings = $this->get();
@@ -57,6 +64,9 @@ final class Settings
         }
         if (array_key_exists('purchase_planning_enabled', $payload)) {
             $settings['purchase_planning_enabled'] = (bool) $payload['purchase_planning_enabled'];
+        }
+        if (array_key_exists('purchasing_stock_sync_enabled', $payload)) {
+            $settings['purchasing_stock_sync_enabled'] = (bool) $payload['purchasing_stock_sync_enabled'];
         }
 
         update_option(self::OPTION_NAME, $settings, false);

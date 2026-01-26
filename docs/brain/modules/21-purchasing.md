@@ -51,3 +51,9 @@ Estados: draft, sent, confirmed, receiving, closed, cancelled (sin receivings ni
 - No puede exceder el qty pendiente por linea (received total <= ordered).
 - Si un PO tiene receivings, sus lineas quedan bloqueadas para edicion.
 - Aun no impacta Inventory ni Cost Ledger (pendiente v0.2).
+
+## v0.2 Stock Intake (Woo)
+- Flag `purchasing_stock_sync_enabled` OFF por defecto (activar manualmente).
+- Idempotencia por receiving_id: `bressol_purchasing_once_receiving_stock_{receiving_id}`.
+- Resolucion product_id: po_line.product_id > sku > skip.
+- Si manage_stock esta desactivado o SKU incorrecto, se omite la linea.

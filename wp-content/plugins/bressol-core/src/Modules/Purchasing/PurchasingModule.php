@@ -8,9 +8,14 @@ use Bressol\Modules\Purchasing\Admin\Actions;
 use Bressol\Modules\Purchasing\Admin\AdminPages;
 use Bressol\Modules\Purchasing\Cli\SelfTestCommand;
 use Bressol\Modules\Purchasing\Cron\PurchasingCron;
+use Bressol\Modules\Purchasing\Repositories\PurchaseOrderRepository;
+use Bressol\Modules\Purchasing\Repositories\ReceivingRepository;
 use Bressol\Modules\Purchasing\Services\AuditLogger;
 use Bressol\Modules\Purchasing\Services\Capabilities;
+use Bressol\Modules\Purchasing\Services\IdempotencyStore;
 use Bressol\Modules\Purchasing\Services\Settings;
+use Bressol\Modules\Purchasing\Services\StockSyncService;
+use Bressol\Modules\Purchasing\Services\Ports\Adapters\WooStockAdapter;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -49,5 +54,17 @@ final class PurchasingModule implements ModuleInterface
                 $this->settings
             ));
         }
+    }
+
+    public static function build_stock_sync_service(): StockSyncService
+    {
+        return new StockSyncService(
+            new Settings(),
+            new IdempotencyStore(),
+            new ReceivingRepository(),
+            new PurchaseOrderRepository(),
+            new WooStockAdapter(),
+            new AuditLogger()
+        );
     }
 }

@@ -15,16 +15,19 @@ final class ReceivingService
     private ReceivingRepository $repository;
     private PurchaseOrderRepository $purchaseOrderRepository;
     private AuditLogger $auditLogger;
+    private StockSyncService $stockSyncService;
 
     public function __construct(
         ReceivingRepository $repository,
         PurchaseOrderRepository $purchaseOrderRepository,
-        AuditLogger $auditLogger
+        AuditLogger $auditLogger,
+        StockSyncService $stockSyncService
     )
     {
         $this->repository = $repository;
         $this->purchaseOrderRepository = $purchaseOrderRepository;
         $this->auditLogger = $auditLogger;
+        $this->stockSyncService = $stockSyncService;
     }
 
     /** @param array<int, array<string, mixed>> $lines
@@ -121,6 +124,16 @@ final class ReceivingService
                 'po_id' => $poId,
                 'status' => (string) ($po['status'] ?? ''),
             ], $poId, 'purchase_order');
+        }
+
+        try {
+            $this->stockSyncService->apply_receiving_stock($receivingId);
+        } catch (\Throwable $exception) {
+            $this->auditLogger->log('stock_sync_error', [
+                'receiving_id' => $receivingId,
+                'po_id' => $poId,
+                'reason' => 'exception',
+            ], $receivingId, 'receiving');
         }
 
         // TODO: Integrar con Inventory/Cost Ledger en v0.2.
