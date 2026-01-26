@@ -39,6 +39,13 @@ final class SelfTestCommand
         $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
         \WP_CLI::log('Table suppliers: ' . ($exists ? 'ok' : 'missing'));
 
+        $poTable = $wpdb->prefix . 'bressol_purchase_orders';
+        $poLinesTable = $wpdb->prefix . 'bressol_purchase_order_lines';
+        $poExists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $poTable));
+        $poLinesExists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $poLinesTable));
+        \WP_CLI::log('Table purchase_orders: ' . ($poExists ? 'ok' : 'missing'));
+        \WP_CLI::log('Table purchase_order_lines: ' . ($poLinesExists ? 'ok' : 'missing'));
+
         $roles = function_exists('wp_roles') ? wp_roles() : null;
         $role = $roles ? $roles->get_role('administrator') : null;
         $hasCap = $role ? $role->has_cap($this->capabilities->get_sensitive_capability()) : false;
@@ -47,6 +54,15 @@ final class SelfTestCommand
         if ($exists) {
             $count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
             \WP_CLI::log('Suppliers count: ' . $count);
+        }
+
+        if ($poExists) {
+            $count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$poTable}");
+            \WP_CLI::log('Purchase orders count: ' . $count);
+        }
+        if ($poLinesExists) {
+            $count = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$poLinesTable}");
+            \WP_CLI::log('Purchase order lines count: ' . $count);
         }
     }
 }

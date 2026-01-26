@@ -39,3 +39,9 @@ La logica de recomendacion se implementara en el servicio `PurchasePlanningServi
 Campos: supplier_code, name, lead_time_days, min_order_cents (nullable), notes (sin PII).
 Validaciones basicas: code uppercase [A-Z0-9_-] (2..32), name 2..120, lead_time 0..365, MOQ >= 0 si existe, notes max 2000 sin HTML.
 No se implementa delete para evitar inconsistencias futuras con POs (pendiente de integridad referencial).
+
+## Purchase Orders MVP (v0.1)
+Cabecera: supplier_id (obligatorio), po_number (opcional, unico), status, customs_fees_cents, tax_rate_bp (opcional), currency=EUR, warehouse_code.
+Lineas: sku opcional, qty > 0, unit_cost_excl_tax_cents >= 0, line_total_excl_tax_cents = qty * unit_cost.
+Customs solo a nivel PO; shipping per product queda en otro modulo.
+Estados: draft, sent, confirmed, receiving, closed, cancelled (sin receivings ni inventario todavia).

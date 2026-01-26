@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace Bressol\Modules\Purchasing\Admin;
 
 use Bressol\Modules\Purchasing\Services\Capabilities;
+use Bressol\Modules\Purchasing\Domain\Enum\Status;
+use Bressol\Modules\Purchasing\Repositories\PurchaseOrderRepository;
 use Bressol\Modules\Purchasing\Repositories\SupplierRepository;
 
 if (!defined('ABSPATH')) {
@@ -88,13 +90,33 @@ final class AdminPages
     {
         $this->assert_can_manage();
 
+        $view = isset($_GET['view']) ? sanitize_text_field(wp_unslash($_GET['view'])) : '';
+        if ($view === 'edit') {
+            $poId = isset($_GET['po_id']) ? absint($_GET['po_id']) : 0;
+            $this->renderPurchaseOrderForm($poId);
+            return;
+        }
+
+        $filters = [
+            'status' => isset($_GET['status']) ? sanitize_text_field(wp_unslash($_GET['status'])) : '',
+            'supplier_id' => isset($_GET['supplier_id']) ? absint($_GET['supplier_id']) : 0,
+            'search' => isset($_GET['s']) ? sanitize_text_field(wp_unslash($_GET['s'])) : '',
+        ];
+        if (!in_array($filters['status'], Status::all(), true)) {
+            $filters['status'] = '';
+        }
+
+        $poRepository = new PurchaseOrderRepository();
+        $rows = $poRepository->list_pos(50, 0, $filters);
+        $suppliers = $this->get_suppliers_index();
+
         echo '<div class="wrap">';
         echo '<h1>Purchasing - Purchase Orders</h1>';
         $this->render_notice();
 
-        echo '<p class="description">Listado placeholder. Sin órdenes todavía.</p>';
-        $this->render_add_button('bressol_purchasing_add_purchase_order', 'bressol_purchasing_add_purchase_order_nonce');
-        $this->render_empty_table('Purchase Orders');
+        $this->render_add_po_link();
+        $this->render_po_filters($filters, $suppliers);
+        $this->render_po_table($rows, $suppliers);
         echo '</div>';
     }
 
@@ -138,6 +160,16 @@ final class AdminPages
             $message = 'Proveedor guardado.';
         } elseif ($notice === 'supplier_save_failed') {
             $message = 'No se pudo guardar el proveedor.';
+            $type = 'notice-error';
+        } elseif ($notice === 'po_saved') {
+            $message = 'PO guardado.';
+        } elseif ($notice === 'po_save_failed') {
+            $message = 'No se pudo guardar el PO.';
+            $type = 'notice-error';
+        } elseif ($notice === 'po_status_changed') {
+            $message = 'Estado actualizado.';
+        } elseif ($notice === 'po_status_failed') {
+            $message = 'No se pudo actualizar el estado.';
             $type = 'notice-error';
         }
 
@@ -268,5 +300,209 @@ final class AdminPages
     private function format_euros(int $cents): string
     {
         return number_format($cents / 100, 2, '.', '');
+    }
+
+    private function render_add_po_link(): void
+    {
+        $url = add_query_arg([
+            'page' => 'bressol-purchasing-pos',
+            'view' => 'edit',
+        ], admin_url('admin.php'));
+        echo '<p><a class="button button-primary" href="' . esc_url($url) . '">Add Purchase Order</a></p>';
+    }
+
+    /** @param array<string, mixed> $filters
+     *  @param array<int, array<string, mixed>> $suppliers
+     */
+    private function render_po_filters(array $filters, array $suppliers): void
+    {
+        $status = (string) ($filters['status'] ?? '');
+        $search = (string) ($filters['search'] ?? '');
+        $supplierId = (int) ($filters['supplier_id'] ?? 0);
+
+        echo '<form method="get" style="margin:12px 0;">';
+        echo '<input type="hidden" name="page" value="bressol-purchasing-pos" />';
+        echo '<input type="text" name="s" value="' . esc_attr($search) . '" placeholder="PO number" /> ';
+        echo '<select name="status">';
+        echo '<option value="">Todos los estados</option>';
+        foreach (Status::all() as $state) {
+            echo '<option value="' . esc_attr($state) . '" ' . selected($status, $state, false) . '>' . esc_html($state) . '</option>';
+        }
+        echo '</select> ';
+        echo '<select name="supplier_id">';
+        echo '<option value="0">Todos los proveedores</option>';
+        foreach ($suppliers as $supplier) {
+            $id = (int) ($supplier['id'] ?? 0);
+            $label = $this->format_supplier_label($supplier);
+            echo '<option value="' . esc_attr((string) $id) . '" ' . selected($supplierId, $id, false) . '>' . esc_html($label) . '</option>';
+        }
+        echo '</select> ';
+        echo '<button class="button">Filtrar</button>';
+        echo '</form>';
+    }
+
+    /** @param array<int, array<string, mixed>> $rows
+     *  @param array<int, array<string, mixed>> $suppliers
+     */
+    private function render_po_table(array $rows, array $suppliers): void
+    {
+        $supplierIndex = [];
+        foreach ($suppliers as $supplier) {
+            if (isset($supplier['id'])) {
+                $supplierIndex[(int) $supplier['id']] = $supplier;
+            }
+        }
+
+        echo '<table class="widefat striped" style="max-width:1200px;">';
+        echo '<thead><tr>';
+        echo '<th>PO#</th><th>Supplier</th><th>Status</th><th>Lines</th><th>Total excl. tax</th><th>Customs</th><th>Updated</th>';
+        echo '</tr></thead><tbody>';
+
+        if ($rows === []) {
+            echo '<tr><td colspan="7">No hay POs.</td></tr>';
+            echo '</tbody></table>';
+            return;
+        }
+
+        foreach ($rows as $row) {
+            $poId = (int) ($row['id'] ?? 0);
+            $poNumber = (string) ($row['po_number'] ?? '');
+            $supplierId = (int) ($row['supplier_id'] ?? 0);
+            $status = (string) ($row['status'] ?? '');
+            $linesCount = (int) ($row['lines_count'] ?? 0);
+            $linesTotal = (int) ($row['lines_total_excl_tax_cents'] ?? 0);
+            $customs = (int) ($row['customs_fees_cents'] ?? 0);
+            $updated = (string) ($row['updated_at_utc'] ?? '');
+
+            $editUrl = add_query_arg([
+                'page' => 'bressol-purchasing-pos',
+                'view' => 'edit',
+                'po_id' => $poId,
+            ], admin_url('admin.php'));
+            $poLabel = $poNumber !== '' ? $poNumber : ('PO #' . $poId);
+            $supplier = $supplierIndex[$supplierId] ?? null;
+            $supplierLabel = $supplier ? $this->format_supplier_label($supplier) : ('Supplier #' . $supplierId);
+
+            echo '<tr>';
+            echo '<td><a href="' . esc_url($editUrl) . '">' . esc_html($poLabel) . '</a></td>';
+            echo '<td>' . esc_html($supplierLabel) . '</td>';
+            echo '<td>' . esc_html($status) . '</td>';
+            echo '<td>' . esc_html((string) $linesCount) . '</td>';
+            echo '<td>' . esc_html($this->format_euros($linesTotal)) . '</td>';
+            echo '<td>' . esc_html($this->format_euros($customs)) . '</td>';
+            echo '<td>' . esc_html($updated) . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+    }
+
+    private function renderPurchaseOrderForm(int $poId): void
+    {
+        $poRepository = new PurchaseOrderRepository();
+        $po = $poId > 0 ? $poRepository->get_po($poId) : null;
+        $lines = $poId > 0 ? $poRepository->get_po_lines($poId) : [];
+
+        if ($poId > 0 && !$po) {
+            $poId = 0;
+        }
+
+        $suppliers = $this->get_suppliers_index();
+        $supplierId = $po ? (int) $po['supplier_id'] : 0;
+        $poNumber = $po ? (string) $po['po_number'] : '';
+        $customs = $po ? (int) $po['customs_fees_cents'] : 0;
+        $taxRate = $po ? $po['tax_rate_bp'] : null;
+        $status = $po ? (string) $po['status'] : Status::DRAFT;
+        $warehouseCode = $po ? (string) $po['warehouse_code'] : 'ALICANTE';
+
+        echo '<div class="wrap">';
+        echo '<h1>' . ($poId > 0 ? 'Editar Purchase Order' : 'Nuevo Purchase Order') . '</h1>';
+        $this->render_notice();
+
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        wp_nonce_field('bressol_purchasing_save_po');
+        echo '<input type="hidden" name="action" value="bressol_purchasing_save_po" />';
+        if ($poId > 0) {
+            echo '<input type="hidden" name="po_id" value="' . esc_attr((string) $poId) . '" />';
+            echo '<input type="hidden" name="status" value="' . esc_attr($status) . '" />';
+        } else {
+            echo '<input type="hidden" name="status" value="' . esc_attr(Status::DRAFT) . '" />';
+        }
+
+        echo '<table class="form-table">';
+        echo '<tr><th>Supplier</th><td><select name="supplier_id" required>';
+        echo '<option value="0">Selecciona proveedor</option>';
+        foreach ($suppliers as $supplier) {
+            $id = (int) ($supplier['id'] ?? 0);
+            $label = $this->format_supplier_label($supplier);
+            echo '<option value="' . esc_attr((string) $id) . '" ' . selected($supplierId, $id, false) . '>' . esc_html($label) . '</option>';
+        }
+        echo '</select></td></tr>';
+        echo '<tr><th>PO number</th><td><input type="text" name="po_number" value="' . esc_attr($poNumber) . '" /></td></tr>';
+        echo '<tr><th>Customs (EUR)</th><td><input type="number" step="0.01" min="0" name="customs_fees_eur" value="' . esc_attr($this->format_euros($customs)) . '" /></td></tr>';
+        echo '<tr><th>Tax rate (bp)</th><td><input type="number" min="0" max="10000" name="tax_rate_bp" value="' . esc_attr($taxRate === null ? '' : (string) $taxRate) . '" /></td></tr>';
+        echo '<tr><th>Warehouse</th><td><input type="text" name="warehouse_code" value="' . esc_attr($warehouseCode) . '" /></td></tr>';
+        echo '<tr><th>Set status</th><td><select name="new_status">';
+        echo '<option value="">Sin cambio</option>';
+        foreach (Status::all() as $state) {
+            echo '<option value="' . esc_attr($state) . '">' . esc_html($state) . '</option>';
+        }
+        echo '</select>';
+        echo '<p class="description">Estado actual: ' . esc_html($status) . '</p>';
+        echo '</td></tr>';
+        echo '</table>';
+
+        echo '<h2>Líneas</h2>';
+        echo '<table class="widefat striped" style="max-width:1000px;">';
+        echo '<thead><tr><th>SKU</th><th>Qty</th><th>Unit cost (EUR)</th></tr></thead><tbody>';
+
+        $rows = $lines;
+        $extraRows = 3;
+        for ($i = 0; $i < $extraRows; $i++) {
+            $rows[] = [
+                'sku' => '',
+                'qty' => '',
+                'unit_cost_excl_tax_cents' => '',
+            ];
+        }
+
+        foreach ($rows as $line) {
+            $sku = (string) ($line['sku'] ?? '');
+            $qty = $line['qty'] ?? '';
+            $unitCents = $line['unit_cost_excl_tax_cents'] ?? '';
+            $unitEuros = $unitCents === '' ? '' : $this->format_euros((int) $unitCents);
+
+            echo '<tr>';
+            echo '<td><input type="text" name="line_sku[]" value="' . esc_attr($sku) . '" /></td>';
+            echo '<td><input type="number" min="1" name="line_qty[]" value="' . esc_attr((string) $qty) . '" /></td>';
+            echo '<td><input type="number" step="0.01" min="0" name="line_unit_cost_eur[]" value="' . esc_attr((string) $unitEuros) . '" /></td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+        echo '<p class="submit"><button type="submit" class="button button-primary">Guardar</button></p>';
+        echo '</form>';
+
+        $backUrl = add_query_arg(['page' => 'bressol-purchasing-pos'], admin_url('admin.php'));
+        echo '<p><a href="' . esc_url($backUrl) . '">&larr; Volver al listado</a></p>';
+        echo '</div>';
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function get_suppliers_index(): array
+    {
+        $repository = new SupplierRepository();
+        return $repository->list_suppliers(200, 0, '');
+    }
+
+    /** @param array<string, mixed> $supplier */
+    private function format_supplier_label(array $supplier): string
+    {
+        $code = (string) ($supplier['supplier_code'] ?? '');
+        $name = (string) ($supplier['name'] ?? '');
+        if ($code !== '' && $name !== '') {
+            return $code . ' - ' . $name;
+        }
+        return $name !== '' ? $name : $code;
     }
 }

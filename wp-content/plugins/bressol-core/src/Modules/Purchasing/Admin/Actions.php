@@ -6,6 +6,9 @@ namespace Bressol\Modules\Purchasing\Admin;
 use Bressol\Modules\Purchasing\Repositories\SupplierRepository;
 use Bressol\Modules\Purchasing\Services\Capabilities;
 use Bressol\Modules\Purchasing\Services\AuditLogger;
+use Bressol\Modules\Purchasing\Services\Ports\NullAdapters\NullCostLedgerWritePort;
+use Bressol\Modules\Purchasing\Repositories\PurchaseOrderRepository;
+use Bressol\Modules\Purchasing\Services\PurchaseOrderService;
 use Bressol\Modules\Purchasing\Services\SupplierService;
 
 if (!defined('ABSPATH')) {
@@ -27,6 +30,8 @@ final class Actions
         add_action('admin_post_bressol_purchasing_add_purchase_order', [$this, 'handle_add_purchase_order']);
         add_action('admin_post_bressol_purchasing_add_receiving', [$this, 'handle_add_receiving']);
         add_action('admin_post_bressol_purchasing_save_supplier', [$this, 'handle_save_supplier']);
+        add_action('admin_post_bressol_purchasing_save_po', [$this, 'handle_save_po']);
+        add_action('admin_post_bressol_purchasing_change_po_status', [$this, 'handle_change_po_status']);
     }
 
     public function handle_add_supplier(): void
@@ -78,6 +83,78 @@ final class Actions
         $this->redirect_with_notice('bressol-purchasing', 'supplier_saved');
     }
 
+    public function handle_save_po(): void
+    {
+        if (!$this->capabilities->current_user_can_sensitive()) {
+            $this->redirect_with_notice('bressol-purchasing-pos', 'forbidden');
+        }
+
+        check_admin_referer('bressol_purchasing_save_po');
+
+        $poId = isset($_POST['po_id']) ? absint($_POST['po_id']) : 0;
+        $newStatus = isset($_POST['new_status']) ? sanitize_text_field(wp_unslash($_POST['new_status'])) : '';
+        $header = [
+            'supplier_id' => isset($_POST['supplier_id']) ? absint($_POST['supplier_id']) : 0,
+            'po_number' => isset($_POST['po_number']) ? wp_unslash($_POST['po_number']) : '',
+            'customs_fees_cents' => $this->parse_eur_to_cents(isset($_POST['customs_fees_eur']) ? wp_unslash($_POST['customs_fees_eur']) : '') ?? 0,
+            'tax_rate_bp' => isset($_POST['tax_rate_bp']) ? wp_unslash($_POST['tax_rate_bp']) : '',
+            'warehouse_code' => isset($_POST['warehouse_code']) ? wp_unslash($_POST['warehouse_code']) : '',
+            'status' => isset($_POST['status']) ? wp_unslash($_POST['status']) : 'draft',
+        ];
+
+        $lines = $this->parse_po_lines($_POST);
+
+        $service = new PurchaseOrderService(
+            new PurchaseOrderRepository(),
+            new SupplierRepository(),
+            new NullCostLedgerWritePort(),
+            new AuditLogger()
+        );
+        $result = $service->create_or_update_po($poId > 0 ? $poId : null, $header, $lines);
+
+        if ($result instanceof \WP_Error) {
+            $this->redirect_with_notice('bressol-purchasing-pos', 'po_save_failed', $this->po_form_args($poId));
+        }
+
+        $poId = is_int($result) ? $result : $poId;
+
+        if ($newStatus !== '' && $poId > 0) {
+            $statusResult = $service->change_status($poId, $newStatus);
+            if ($statusResult instanceof \WP_Error) {
+                $this->redirect_with_notice('bressol-purchasing-pos', 'po_status_failed', $this->po_form_args($poId));
+            }
+            $this->redirect_with_notice('bressol-purchasing-pos', 'po_status_changed', $this->po_form_args($poId));
+        }
+
+        $this->redirect_with_notice('bressol-purchasing-pos', 'po_saved', $this->po_form_args($poId));
+    }
+
+    public function handle_change_po_status(): void
+    {
+        if (!$this->capabilities->current_user_can_sensitive()) {
+            $this->redirect_with_notice('bressol-purchasing-pos', 'forbidden');
+        }
+
+        check_admin_referer('bressol_purchasing_change_po_status');
+
+        $poId = isset($_POST['po_id']) ? absint($_POST['po_id']) : 0;
+        $newStatus = isset($_POST['new_status']) ? sanitize_text_field(wp_unslash($_POST['new_status'])) : '';
+
+        $service = new PurchaseOrderService(
+            new PurchaseOrderRepository(),
+            new SupplierRepository(),
+            new NullCostLedgerWritePort(),
+            new AuditLogger()
+        );
+        $result = $service->change_status($poId, $newStatus);
+
+        if ($result instanceof \WP_Error) {
+            $this->redirect_with_notice('bressol-purchasing-pos', 'po_status_failed', $this->po_form_args($poId));
+        }
+
+        $this->redirect_with_notice('bressol-purchasing-pos', 'po_status_changed', $this->po_form_args($poId));
+    }
+
     private function handle_todo_action(string $nonceAction, string $page): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
@@ -115,5 +192,77 @@ final class Actions
             'view' => 'edit',
             'supplier_id' => $supplierId,
         ];
+    }
+
+    private function po_form_args(int $poId): array
+    {
+        if ($poId <= 0) {
+            return [
+                'view' => 'edit',
+            ];
+        }
+
+        return [
+            'view' => 'edit',
+            'po_id' => $poId,
+        ];
+    }
+
+    /** @param array<string, mixed> $input
+     *  @return array<int, array<string, mixed>>
+     */
+    private function parse_po_lines(array $input): array
+    {
+        $skus = isset($input['line_sku']) ? (array) $input['line_sku'] : [];
+        $qtys = isset($input['line_qty']) ? (array) $input['line_qty'] : [];
+        $costs = isset($input['line_unit_cost_eur']) ? (array) $input['line_unit_cost_eur'] : [];
+
+        $lines = [];
+        $count = max(count($skus), count($qtys), count($costs));
+        for ($i = 0; $i < $count; $i++) {
+            $sku = isset($skus[$i]) ? wp_unslash($skus[$i]) : '';
+            $qtyRaw = isset($qtys[$i]) ? wp_unslash($qtys[$i]) : '';
+            $costRaw = isset($costs[$i]) ? wp_unslash($costs[$i]) : '';
+
+            $qty = is_numeric($qtyRaw) ? (int) $qtyRaw : 0;
+            $costCents = $this->parse_eur_to_cents($costRaw);
+
+            if ($qty <= 0 && $costCents === null && trim((string) $sku) === '') {
+                continue;
+            }
+
+            $lines[] = [
+                'sku' => $sku,
+                'qty' => $qty,
+                'unit_cost_excl_tax_cents' => $costCents === null ? -1 : $costCents,
+            ];
+        }
+
+        return $lines;
+    }
+
+    private function parse_eur_to_cents($raw): ?int
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        $value = is_string($raw) ? trim($raw) : (string) $raw;
+        if ($value === '') {
+            return null;
+        }
+
+        $value = str_replace(',', '.', $value);
+        $value = preg_replace('/[^0-9.]/', '', $value);
+        if ($value === '' || !is_numeric($value)) {
+            return null;
+        }
+
+        $float = (float) $value;
+        if ($float < 0) {
+            return null;
+        }
+
+        return (int) round($float * 100);
     }
 }
