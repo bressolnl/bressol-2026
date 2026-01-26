@@ -115,7 +115,8 @@ final class Actions
             new SupplierRepository(),
             $receivingRepository,
             new NullCostLedgerWritePort(),
-            new AuditLogger()
+            new AuditLogger(),
+            PurchasingModule::build_cost_ledger_sync_service()
         );
         $result = $service->create_or_update_po($poId > 0 ? $poId : null, $header, $lines, $allowLineUpdate);
 
@@ -152,7 +153,8 @@ final class Actions
             new SupplierRepository(),
             new ReceivingRepository(),
             new NullCostLedgerWritePort(),
-            new AuditLogger()
+            new AuditLogger(),
+            PurchasingModule::build_cost_ledger_sync_service()
         );
         $result = $service->change_status($poId, $newStatus);
 

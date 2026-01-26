@@ -56,6 +56,8 @@ final class AuditLogger
             'line_count',
             'qty',
             'qty_total',
+            'lines_excl_tax_cents',
+            'total_excl_tax_cents',
             'total_qty',
             'total_lines',
             'totals_cents',
@@ -74,7 +76,7 @@ final class AuditLogger
                 continue;
             }
             $value = $context[$key];
-            if (in_array($key, ['supplier_id', 'po_id', 'receiving_id', 'po_line_id', 'tax_rate_bp', 'customs_fees_cents', 'line_count', 'qty', 'qty_total', 'total_qty', 'total_lines', 'totals_cents', 'window_weeks', 'reminder_weeks_before'], true)) {
+            if (in_array($key, ['supplier_id', 'po_id', 'receiving_id', 'po_line_id', 'tax_rate_bp', 'customs_fees_cents', 'line_count', 'qty', 'qty_total', 'lines_excl_tax_cents', 'total_excl_tax_cents', 'total_qty', 'total_lines', 'totals_cents', 'window_weeks', 'reminder_weeks_before'], true)) {
                 $payload[$key] = $value === null ? null : (int) $value;
                 continue;
             }

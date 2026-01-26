@@ -527,6 +527,8 @@ final class AdminPages
             $this->render_po_receivings_summary($poId, $lines, $receivedTotals);
             $syncEnabled = (new Settings())->is_purchasing_stock_sync_enabled();
             echo '<p class="description">Stock sync: ' . esc_html($syncEnabled ? 'ON' : 'OFF') . '</p>';
+            $ledgerEnabled = (new Settings())->is_purchasing_cost_ledger_sync_enabled();
+            echo '<p class="description">Cost ledger sync: ' . esc_html($ledgerEnabled ? 'ON' : 'OFF') . '</p>';
             $addUrl = add_query_arg([
                 'page' => 'bressol-purchasing-receivings',
                 'view' => 'add',

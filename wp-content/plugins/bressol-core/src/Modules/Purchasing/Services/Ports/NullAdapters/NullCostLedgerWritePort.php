@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
 
 final class NullCostLedgerWritePort implements CostLedgerWritePort
 {
-    public function record_purchase_receipt(int $purchaseOrderId, array $payload): void
+    public function record_purchase(array $payload): void
     {
     }
 }

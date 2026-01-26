@@ -20,19 +20,22 @@ final class PurchaseOrderService
     private ReceivingRepository $receivingRepository;
     private CostLedgerWritePort $costLedgerPort;
     private AuditLogger $auditLogger;
+    private CostLedgerSyncService $costLedgerSyncService;
 
     public function __construct(
         PurchaseOrderRepository $repository,
         SupplierRepository $supplierRepository,
         ReceivingRepository $receivingRepository,
         CostLedgerWritePort $costLedgerPort,
-        AuditLogger $auditLogger
+        AuditLogger $auditLogger,
+        CostLedgerSyncService $costLedgerSyncService
     ) {
         $this->repository = $repository;
         $this->supplierRepository = $supplierRepository;
         $this->receivingRepository = $receivingRepository;
         $this->costLedgerPort = $costLedgerPort;
         $this->auditLogger = $auditLogger;
+        $this->costLedgerSyncService = $costLedgerSyncService;
     }
 
     /** @param array<string, mixed> $filters
@@ -49,7 +52,10 @@ final class PurchaseOrderService
             return;
         }
 
-        $this->costLedgerPort->record_purchase_receipt($purchaseOrderId, []);
+        $this->costLedgerPort->record_purchase([
+            'source' => 'purchasing',
+            'source_ref' => 'po:' . $purchaseOrderId,
+        ]);
         $this->auditLogger->log('po_received', [
             'po_id' => $purchaseOrderId,
             'result' => 'stub',
@@ -194,6 +200,17 @@ final class PurchaseOrderService
             'to' => $newStatus,
             'totals_cents' => $totals['total_excl_tax_cents'],
         ], $id, 'purchase_order');
+
+        if ($newStatus === Status::CLOSED) {
+            try {
+                $this->costLedgerSyncService->apply_po_closed_to_cost_ledger($id);
+            } catch (\Throwable $exception) {
+                $this->auditLogger->log('cost_ledger_sync_error', [
+                    'po_id' => $id,
+                    'reason' => 'exception',
+                ], $id, 'purchase_order');
+            }
+        }
 
         return true;
     }

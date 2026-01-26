@@ -12,9 +12,11 @@ use Bressol\Modules\Purchasing\Repositories\PurchaseOrderRepository;
 use Bressol\Modules\Purchasing\Repositories\ReceivingRepository;
 use Bressol\Modules\Purchasing\Services\AuditLogger;
 use Bressol\Modules\Purchasing\Services\Capabilities;
+use Bressol\Modules\Purchasing\Services\CostLedgerSyncService;
 use Bressol\Modules\Purchasing\Services\IdempotencyStore;
 use Bressol\Modules\Purchasing\Services\Settings;
 use Bressol\Modules\Purchasing\Services\StockSyncService;
+use Bressol\Modules\Purchasing\Services\Ports\Adapters\CostLedgerAdapter;
 use Bressol\Modules\Purchasing\Services\Ports\Adapters\WooStockAdapter;
 
 if (!defined('ABSPATH')) {
@@ -64,6 +66,17 @@ final class PurchasingModule implements ModuleInterface
             new ReceivingRepository(),
             new PurchaseOrderRepository(),
             new WooStockAdapter(),
+            new AuditLogger()
+        );
+    }
+
+    public static function build_cost_ledger_sync_service(): CostLedgerSyncService
+    {
+        return new CostLedgerSyncService(
+            new Settings(),
+            new IdempotencyStore(),
+            new PurchaseOrderRepository(),
+            new CostLedgerAdapter(),
             new AuditLogger()
         );
     }

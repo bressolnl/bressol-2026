@@ -57,3 +57,9 @@ Estados: draft, sent, confirmed, receiving, closed, cancelled (sin receivings ni
 - Idempotencia por receiving_id: `bressol_purchasing_once_receiving_stock_{receiving_id}`.
 - Resolucion product_id: po_line.product_id > sku > skip.
 - Si manage_stock esta desactivado o SKU incorrecto, se omite la linea.
+
+## v0.2 Cost Ledger Sync (PO closed)
+- Flag `purchasing_cost_ledger_sync_enabled` OFF por defecto.
+- Idempotencia por po_id: `bressol_purchasing_once_po_costledger_{po_id}`.
+- Registra lineas del PO + customs_fees_cents (sin shipping).
+- Limitacion: v0.2 registra al cerrar PO; v0.3 puede registrar por receiving si hace falta granularidad.

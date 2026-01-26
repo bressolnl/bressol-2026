@@ -10,5 +10,5 @@ if (!defined('ABSPATH')) {
 interface CostLedgerWritePort
 {
     /** @param array<string, mixed> $payload */
-    public function record_purchase_receipt(int $purchaseOrderId, array $payload): void;
+    public function record_purchase(array $payload): void;
 }
