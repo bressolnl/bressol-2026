@@ -18,6 +18,11 @@ if (!defined('ABSPATH')) {
 
 final class AdminPages
 {
+    private const PAGE_SUPPLIERS = 'bressol_purchasing_suppliers';
+    private const PAGE_POS = 'bressol_purchasing_pos';
+    private const PAGE_RECEIVINGS = 'bressol_purchasing_receivings';
+    private const PAGE_DIAGNOSTICS = 'bressol_purchasing_diagnostics';
+
     private Capabilities $capabilities;
 
     public function __construct(Capabilities $capabilities)
@@ -34,39 +39,39 @@ final class AdminPages
             'Purchasing',
             'Purchasing',
             $capability,
-            'bressol-purchasing',
+            self::PAGE_SUPPLIERS,
             [$this, 'renderSuppliersPage']
         );
 
         add_submenu_page(
-            'bressol-purchasing',
+            self::PAGE_SUPPLIERS,
             'Suppliers',
             'Suppliers',
             $capability,
-            'bressol-purchasing',
+            self::PAGE_SUPPLIERS,
             [$this, 'renderSuppliersPage']
         );
 
         add_submenu_page(
-            'bressol-purchasing',
+            self::PAGE_SUPPLIERS,
             'Purchase Orders',
             'Purchase Orders',
             $capability,
-            'bressol-purchasing-pos',
+            self::PAGE_POS,
             [$this, 'renderPurchaseOrdersPage']
         );
 
         add_submenu_page(
-            'bressol-purchasing',
+            self::PAGE_SUPPLIERS,
             'Receivings',
             'Receivings',
             $capability,
-            'bressol-purchasing-receivings',
+            self::PAGE_RECEIVINGS,
             [$this, 'renderReceivingsPage']
         );
 
         add_submenu_page(
-            'bressol-purchasing',
+            self::PAGE_SUPPLIERS,
             'Purchase Planning',
             'Purchase Planning',
             $capability,
@@ -74,12 +79,13 @@ final class AdminPages
             [$this, 'renderPurchasePlanningPage']
         );
 
+        // Diagnostics slug: bressol_purchasing_diagnostics
         add_submenu_page(
-            'bressol-purchasing',
+            self::PAGE_SUPPLIERS,
             'Diagnostics',
             'Diagnostics',
             $capability,
-            'bressol-purchasing-diagnostics',
+            self::PAGE_DIAGNOSTICS,
             [$this, 'renderDiagnosticsPage']
         );
     }
@@ -87,6 +93,10 @@ final class AdminPages
     public function renderSuppliersPage(): void
     {
         $this->assert_can_manage();
+
+        $page = isset($_GET['page']) ? sanitize_text_field(wp_unslash($_GET['page'])) : '';
+        $this->redirect_if_legacy_page(['bressol-purchasing'], self::PAGE_SUPPLIERS);
+        $this->render_tabs($page);
 
         $view = isset($_GET['view']) ? sanitize_text_field(wp_unslash($_GET['view'])) : '';
         if ($view === 'edit') {
@@ -111,6 +121,10 @@ final class AdminPages
     public function renderPurchaseOrdersPage(): void
     {
         $this->assert_can_manage();
+
+        $page = isset($_GET['page']) ? sanitize_text_field(wp_unslash($_GET['page'])) : '';
+        $this->redirect_if_legacy_page(['bressol-purchasing-pos'], self::PAGE_POS);
+        $this->render_tabs($page);
 
         $view = isset($_GET['view']) ? sanitize_text_field(wp_unslash($_GET['view'])) : '';
         if ($view === 'edit') {
@@ -145,6 +159,10 @@ final class AdminPages
     public function renderReceivingsPage(): void
     {
         $this->assert_can_manage();
+
+        $page = isset($_GET['page']) ? sanitize_text_field(wp_unslash($_GET['page'])) : '';
+        $this->redirect_if_legacy_page(['bressol-purchasing-receivings'], self::PAGE_RECEIVINGS);
+        $this->render_tabs($page);
 
         $view = isset($_GET['view']) ? sanitize_text_field(wp_unslash($_GET['view'])) : '';
         if ($view === 'add') {
@@ -213,6 +231,10 @@ final class AdminPages
     public function renderDiagnosticsPage(): void
     {
         $this->assert_can_manage();
+
+        $page = isset($_GET['page']) ? sanitize_text_field(wp_unslash($_GET['page'])) : '';
+        $this->redirect_if_legacy_page(['bressol-purchasing-diagnostics'], self::PAGE_DIAGNOSTICS);
+        $this->render_tabs($page);
 
         echo '<div class="wrap">';
         echo '<h1>Purchasing - Diagnostics</h1>';
@@ -309,7 +331,7 @@ final class AdminPages
     private function render_add_supplier_link(): void
     {
         $url = add_query_arg([
-            'page' => 'bressol-purchasing',
+            'page' => self::PAGE_SUPPLIERS,
             'view' => 'edit',
         ], admin_url('admin.php'));
         echo '<p><a class="button button-primary" href="' . esc_url($url) . '">Add supplier</a></p>';
@@ -318,7 +340,7 @@ final class AdminPages
     private function render_search_form(string $search): void
     {
         echo '<form method="get" style="margin:12px 0;">';
-        echo '<input type="hidden" name="page" value="bressol-purchasing" />';
+        echo '<input type="hidden" name="page" value="' . esc_attr(self::PAGE_SUPPLIERS) . '" />';
         echo '<input type="text" name="s" value="' . esc_attr($search) . '" placeholder="Buscar proveedor" />';
         echo '<button class="button">Buscar</button>';
         echo '</form>';
@@ -403,7 +425,7 @@ final class AdminPages
         echo '<p class="submit"><button type="submit" class="button button-primary">Guardar</button></p>';
         echo '</form>';
 
-        $backUrl = add_query_arg(['page' => 'bressol-purchasing'], admin_url('admin.php'));
+        $backUrl = add_query_arg(['page' => self::PAGE_SUPPLIERS], admin_url('admin.php'));
         echo '<p><a href="' . esc_url($backUrl) . '">&larr; Volver al listado</a></p>';
         echo '</div>';
     }
@@ -416,7 +438,7 @@ final class AdminPages
     private function render_add_po_link(): void
     {
         $url = add_query_arg([
-            'page' => 'bressol-purchasing-pos',
+            'page' => self::PAGE_POS,
             'view' => 'edit',
         ], admin_url('admin.php'));
         echo '<p><a class="button button-primary" href="' . esc_url($url) . '">Add Purchase Order</a></p>';
@@ -432,7 +454,7 @@ final class AdminPages
         $supplierId = (int) ($filters['supplier_id'] ?? 0);
 
         echo '<form method="get" style="margin:12px 0;">';
-        echo '<input type="hidden" name="page" value="bressol-purchasing-pos" />';
+        echo '<input type="hidden" name="page" value="' . esc_attr(self::PAGE_POS) . '" />';
         echo '<input type="text" name="s" value="' . esc_attr($search) . '" placeholder="PO number" /> ';
         echo '<select name="status">';
         echo '<option value="">Todos los estados</option>';
@@ -486,7 +508,7 @@ final class AdminPages
             $updated = (string) ($row['updated_at_utc'] ?? '');
 
             $editUrl = add_query_arg([
-                'page' => 'bressol-purchasing-pos',
+                'page' => self::PAGE_POS,
                 'view' => 'edit',
                 'po_id' => $poId,
             ], admin_url('admin.php'));
@@ -619,14 +641,14 @@ final class AdminPages
             $ledgerEnabled = (new Settings())->is_purchasing_cost_ledger_sync_enabled();
             echo '<p class="description">Cost ledger sync: ' . esc_html($ledgerEnabled ? 'ON' : 'OFF') . '</p>';
             $addUrl = add_query_arg([
-                'page' => 'bressol-purchasing-receivings',
+                'page' => self::PAGE_RECEIVINGS,
                 'view' => 'add',
                 'po_id' => $poId,
             ], admin_url('admin.php'));
             echo '<p><a class="button" href="' . esc_url($addUrl) . '">Add Receiving</a></p>';
         }
 
-        $backUrl = add_query_arg(['page' => 'bressol-purchasing-pos'], admin_url('admin.php'));
+        $backUrl = add_query_arg(['page' => self::PAGE_POS], admin_url('admin.php'));
         echo '<p><a href="' . esc_url($backUrl) . '">&larr; Volver al listado</a></p>';
         echo '</div>';
     }
@@ -656,7 +678,7 @@ final class AdminPages
         $search = (string) ($filters['search'] ?? '');
 
         echo '<form method="get" style="margin:12px 0;">';
-        echo '<input type="hidden" name="page" value="bressol-purchasing-receivings" />';
+        echo '<input type="hidden" name="page" value="' . esc_attr(self::PAGE_RECEIVINGS) . '" />';
         echo '<input type="number" min="0" name="po_id" value="' . esc_attr((string) $poId) . '" placeholder="PO ID" /> ';
         echo '<input type="text" name="s" value="' . esc_attr($search) . '" placeholder="PO number" /> ';
         echo '<button class="button">Filtrar</button>';
@@ -794,7 +816,7 @@ final class AdminPages
         echo '<p class="submit"><button type="submit" class="button button-primary">Crear recepción</button></p>';
         echo '</form>';
 
-        $backUrl = add_query_arg(['page' => 'bressol-purchasing-pos', 'view' => 'edit', 'po_id' => $poId], admin_url('admin.php'));
+        $backUrl = add_query_arg(['page' => self::PAGE_POS, 'view' => 'edit', 'po_id' => $poId], admin_url('admin.php'));
         echo '<p><a href="' . esc_url($backUrl) . '">&larr; Volver al PO</a></p>';
         echo '</div>';
     }
@@ -1054,6 +1076,45 @@ final class AdminPages
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $diff = $date->getTimestamp() - $now->getTimestamp();
         return (int) floor($diff / 86400);
+    }
+
+    private function render_tabs(string $activePage): void
+    {
+        $tabs = [
+            self::PAGE_SUPPLIERS => 'Suppliers',
+            self::PAGE_POS => 'Purchase Orders',
+            self::PAGE_RECEIVINGS => 'Receivings',
+            self::PAGE_DIAGNOSTICS => 'Diagnostics',
+        ];
+
+        echo '<h2 class="nav-tab-wrapper" style="margin-bottom:16px;">';
+        foreach ($tabs as $slug => $label) {
+            $url = admin_url('admin.php?page=' . $slug);
+            $active = $activePage === $slug ? ' nav-tab-active' : '';
+            echo '<a href="' . esc_url($url) . '" class="nav-tab' . esc_attr($active) . '">' . esc_html($label) . '</a>';
+        }
+        echo '</h2>';
+    }
+
+    /** @param array<int, string> $legacySlugs */
+    private function redirect_if_legacy_page(array $legacySlugs, string $targetSlug): void
+    {
+        $page = isset($_GET['page']) ? sanitize_text_field(wp_unslash($_GET['page'])) : '';
+        if ($page === '' || !in_array($page, $legacySlugs, true)) {
+            return;
+        }
+
+        $args = [];
+        foreach ($_GET as $key => $value) {
+            if (!is_scalar($value)) {
+                continue;
+            }
+            $args[sanitize_text_field((string) $key)] = sanitize_text_field(wp_unslash((string) $value));
+        }
+        $args['page'] = $targetSlug;
+        $url = add_query_arg($args, admin_url('admin.php'));
+        wp_safe_redirect($url);
+        exit;
     }
 
     /** @return array<string, mixed>|null */

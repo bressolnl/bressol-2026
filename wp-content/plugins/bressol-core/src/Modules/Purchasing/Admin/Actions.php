@@ -43,23 +43,23 @@ final class Actions
 
     public function handle_add_supplier(): void
     {
-        $this->handle_todo_action('bressol_purchasing_add_supplier_nonce', 'bressol-purchasing');
+        $this->handle_todo_action('bressol_purchasing_add_supplier_nonce', 'bressol_purchasing_suppliers');
     }
 
     public function handle_add_purchase_order(): void
     {
-        $this->handle_todo_action('bressol_purchasing_add_purchase_order_nonce', 'bressol-purchasing-pos');
+        $this->handle_todo_action('bressol_purchasing_add_purchase_order_nonce', 'bressol_purchasing_pos');
     }
 
     public function handle_add_receiving(): void
     {
-        $this->handle_todo_action('bressol_purchasing_add_receiving_nonce', 'bressol-purchasing-receivings');
+        $this->handle_todo_action('bressol_purchasing_add_receiving_nonce', 'bressol_purchasing_receivings');
     }
 
     public function handle_save_supplier(): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
-            $this->redirect_with_notice('bressol-purchasing', 'forbidden');
+            $this->redirect_with_notice('bressol_purchasing_suppliers', 'forbidden');
         }
 
         check_admin_referer('bressol_purchasing_save_supplier');
@@ -84,16 +84,16 @@ final class Actions
         }
 
         if ($result instanceof \WP_Error) {
-            $this->redirect_with_notice('bressol-purchasing', 'supplier_save_failed', $this->supplier_form_args($supplierId));
+            $this->redirect_with_notice('bressol_purchasing_suppliers', 'supplier_save_failed', $this->supplier_form_args($supplierId));
         }
 
-        $this->redirect_with_notice('bressol-purchasing', 'supplier_saved');
+        $this->redirect_with_notice('bressol_purchasing_suppliers', 'supplier_saved');
     }
 
     public function handle_save_po(): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
-            $this->redirect_with_notice('bressol-purchasing-pos', 'forbidden');
+            $this->redirect_with_notice('bressol_purchasing_pos', 'forbidden');
         }
 
         check_admin_referer('bressol_purchasing_save_po');
@@ -124,7 +124,7 @@ final class Actions
         $result = $service->create_or_update_po($poId > 0 ? $poId : null, $header, $lines, $allowLineUpdate);
 
         if ($result instanceof \WP_Error) {
-            $this->redirect_with_notice('bressol-purchasing-pos', 'po_save_failed', $this->po_form_args($poId));
+            $this->redirect_with_notice('bressol_purchasing_pos', 'po_save_failed', $this->po_form_args($poId));
         }
 
         $poId = is_int($result) ? $result : $poId;
@@ -132,18 +132,18 @@ final class Actions
         if ($newStatus !== '' && $poId > 0) {
             $statusResult = $service->change_status($poId, $newStatus);
             if ($statusResult instanceof \WP_Error) {
-                $this->redirect_with_notice('bressol-purchasing-pos', 'po_status_failed', $this->po_form_args($poId));
+                $this->redirect_with_notice('bressol_purchasing_pos', 'po_status_failed', $this->po_form_args($poId));
             }
-            $this->redirect_with_notice('bressol-purchasing-pos', 'po_status_changed', $this->po_form_args($poId));
+            $this->redirect_with_notice('bressol_purchasing_pos', 'po_status_changed', $this->po_form_args($poId));
         }
 
-        $this->redirect_with_notice('bressol-purchasing-pos', 'po_saved', $this->po_form_args($poId));
+        $this->redirect_with_notice('bressol_purchasing_pos', 'po_saved', $this->po_form_args($poId));
     }
 
     public function handle_change_po_status(): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
-            $this->redirect_with_notice('bressol-purchasing-pos', 'forbidden');
+            $this->redirect_with_notice('bressol_purchasing_pos', 'forbidden');
         }
 
         check_admin_referer('bressol_purchasing_change_po_status');
@@ -162,16 +162,16 @@ final class Actions
         $result = $service->change_status($poId, $newStatus);
 
         if ($result instanceof \WP_Error) {
-            $this->redirect_with_notice('bressol-purchasing-pos', 'po_status_failed', $this->po_form_args($poId));
+            $this->redirect_with_notice('bressol_purchasing_pos', 'po_status_failed', $this->po_form_args($poId));
         }
 
-        $this->redirect_with_notice('bressol-purchasing-pos', 'po_status_changed', $this->po_form_args($poId));
+        $this->redirect_with_notice('bressol_purchasing_pos', 'po_status_changed', $this->po_form_args($poId));
     }
 
     public function handle_create_receiving(): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
-            $this->redirect_with_notice('bressol-purchasing-receivings', 'forbidden');
+            $this->redirect_with_notice('bressol_purchasing_receivings', 'forbidden');
         }
 
         check_admin_referer('bressol_purchasing_create_receiving');
@@ -180,7 +180,7 @@ final class Actions
         $receivedAt = isset($_POST['received_at']) ? wp_unslash($_POST['received_at']) : '';
         $receivedAtUtc = $this->parse_received_at_utc(is_string($receivedAt) ? $receivedAt : '');
         if ($receivedAtUtc === false) {
-            $this->redirect_with_notice('bressol-purchasing-receivings', 'receiving_save_failed', ['po_id' => $poId, 'view' => 'add']);
+            $this->redirect_with_notice('bressol_purchasing_receivings', 'receiving_save_failed', ['po_id' => $poId, 'view' => 'add']);
         }
 
         $note = isset($_POST['note']) ? wp_unslash($_POST['note']) : '';
@@ -195,10 +195,10 @@ final class Actions
         $result = $service->create_receiving($poId, $receivedAtUtc ?: null, is_string($note) ? $note : null, $lines);
 
         if ($result instanceof \WP_Error) {
-            $this->redirect_with_notice('bressol-purchasing-receivings', 'receiving_save_failed', ['po_id' => $poId, 'view' => 'add']);
+            $this->redirect_with_notice('bressol_purchasing_receivings', 'receiving_save_failed', ['po_id' => $poId, 'view' => 'add']);
         }
 
-        $this->redirect_with_notice('bressol-purchasing-pos', 'receiving_saved', ['view' => 'edit', 'po_id' => $poId]);
+        $this->redirect_with_notice('bressol_purchasing_pos', 'receiving_saved', ['view' => 'edit', 'po_id' => $poId]);
     }
 
     public function handle_planning_run(): void
@@ -225,7 +225,7 @@ final class Actions
     public function handle_diagnostics_planning_run(): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
-            $this->redirect_with_notice('bressol-purchasing-diagnostics', 'forbidden');
+            $this->redirect_with_notice('bressol_purchasing_diagnostics', 'forbidden');
         }
 
         check_admin_referer('bressol_purchasing_diagnostics_planning_run');
@@ -247,22 +247,22 @@ final class Actions
             (new AuditLogger())->log('diagnostics_planning_error', [
                 'result' => 'exception',
             ]);
-            $this->redirect_with_notice('bressol-purchasing-diagnostics', 'diagnostics_planning_failed');
+            $this->redirect_with_notice('bressol_purchasing_diagnostics', 'diagnostics_planning_failed');
         }
 
-        $this->redirect_with_notice('bressol-purchasing-diagnostics', 'diagnostics_planning_ok');
+        $this->redirect_with_notice('bressol_purchasing_diagnostics', 'diagnostics_planning_ok');
     }
 
     public function handle_diagnostics_clear(): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
-            $this->redirect_with_notice('bressol-purchasing-diagnostics', 'forbidden');
+            $this->redirect_with_notice('bressol_purchasing_diagnostics', 'forbidden');
         }
 
         check_admin_referer('bressol_purchasing_diagnostics_clear');
         delete_option('bressol_purchasing_diagnostics_last_result');
 
-        $this->redirect_with_notice('bressol-purchasing-diagnostics', 'diagnostics_cleared');
+        $this->redirect_with_notice('bressol_purchasing_diagnostics', 'diagnostics_cleared');
     }
 
     private function handle_todo_action(string $nonceAction, string $page): void

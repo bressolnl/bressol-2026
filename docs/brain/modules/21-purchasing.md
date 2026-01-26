@@ -76,3 +76,4 @@ Estados: draft, sent, confirmed, receiving, closed, cancelled (sin receivings ni
 - Pantalla admin: Bressol > Purchasing > Diagnostics.
 - Health checks: tablas, caps, flags, counts, latest planning run.
 - Acciones: ejecutar planning dry-run/save y guardar ultimo resultado.
+- Ruta: WP Admin → Bressol → Purchasing → Diagnostics (page=bressol_purchasing_diagnostics).
