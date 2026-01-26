@@ -67,6 +67,7 @@ final class AuditLogger
             'reminder_weeks_before',
             'suggestion_count',
             'inputs_available',
+            'mode',
         ];
 
         $payload = [

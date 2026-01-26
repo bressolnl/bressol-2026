@@ -71,3 +71,8 @@ Estados: draft, sent, confirmed, receiving, closed, cancelled (sin receivings ni
 - Propuesta minima basada en forecast o ventas (si no hay datos, queda vacio).
 - No crea POs automaticamente.
 - Sin PII.
+
+## Testing without WP-CLI (Diagnostics page)
+- Pantalla admin: Bressol > Purchasing > Diagnostics.
+- Health checks: tablas, caps, flags, counts, latest planning run.
+- Acciones: ejecutar planning dry-run/save y guardar ultimo resultado.

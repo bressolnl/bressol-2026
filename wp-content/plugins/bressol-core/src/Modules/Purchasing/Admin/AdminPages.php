@@ -73,6 +73,15 @@ final class AdminPages
             'bressol-purchasing-planning',
             [$this, 'renderPurchasePlanningPage']
         );
+
+        add_submenu_page(
+            'bressol-purchasing',
+            'Diagnostics',
+            'Diagnostics',
+            $capability,
+            'bressol-purchasing-diagnostics',
+            [$this, 'renderDiagnosticsPage']
+        );
     }
 
     public function renderSuppliersPage(): void
@@ -201,6 +210,21 @@ final class AdminPages
         echo '</div>';
     }
 
+    public function renderDiagnosticsPage(): void
+    {
+        $this->assert_can_manage();
+
+        echo '<div class="wrap">';
+        echo '<h1>Purchasing - Diagnostics</h1>';
+        $this->render_notice();
+
+        $this->render_diagnostics_health_checks();
+        $this->render_diagnostics_actions();
+        $this->render_diagnostics_last_result();
+
+        echo '</div>';
+    }
+
     private function assert_can_manage(): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
@@ -251,6 +275,13 @@ final class AdminPages
         } elseif ($notice === 'planning_run_failed') {
             $message = 'No se pudo ejecutar planning.';
             $type = 'notice-error';
+        } elseif ($notice === 'diagnostics_planning_ok') {
+            $message = 'Diagnostics: planning ejecutado.';
+        } elseif ($notice === 'diagnostics_planning_failed') {
+            $message = 'Diagnostics: no se pudo ejecutar planning.';
+            $type = 'notice-error';
+        } elseif ($notice === 'diagnostics_cleared') {
+            $message = 'Diagnostics: resultados limpiados.';
         }
 
         echo '<p class="notice ' . esc_attr($type) . '" style="padding:8px 12px;">';
@@ -799,6 +830,151 @@ final class AdminPages
         echo '</div>';
     }
 
+    private function render_diagnostics_health_checks(): void
+    {
+        global $wpdb;
+
+        $tables = [
+            'suppliers' => $wpdb->prefix . 'bressol_suppliers',
+            'purchase_orders' => $wpdb->prefix . 'bressol_purchase_orders',
+            'purchase_order_lines' => $wpdb->prefix . 'bressol_purchase_order_lines',
+            'receivings' => $wpdb->prefix . 'bressol_receivings',
+            'receiving_lines' => $wpdb->prefix . 'bressol_receiving_lines',
+        ];
+
+        $counts = [];
+        foreach ($tables as $key => $table) {
+            $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+            $counts[$key] = $exists ? (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}") : null;
+        }
+
+        $roles = function_exists('wp_roles') ? wp_roles() : null;
+        $role = $roles ? $roles->get_role('administrator') : null;
+        $capExists = $role ? $role->has_cap('bressol_manage_purchasing') : false;
+
+        $settings = new Settings();
+        $flags = [
+            'purchasing_stock_sync_enabled' => $settings->is_purchasing_stock_sync_enabled(),
+            'purchasing_cost_ledger_sync_enabled' => $settings->is_purchasing_cost_ledger_sync_enabled(),
+            'purchase_planning_enabled' => $settings->is_purchase_planning_enabled(),
+            'purchasing_cron_enabled' => $settings->is_purchasing_cron_enabled(),
+        ];
+
+        $planningLatest = get_option('bressol_purchasing_planning_latest', '');
+        $latestExists = is_string($planningLatest) && $planningLatest !== '';
+
+        echo '<h2>Health checks</h2>';
+        echo '<table class="widefat striped" style="max-width:1000px;">';
+        echo '<thead><tr><th>Check</th><th>Status</th><th>Details</th></tr></thead><tbody>';
+
+        foreach ($tables as $key => $table) {
+            $exists = $counts[$key] !== null;
+            $count = $counts[$key];
+            echo '<tr>';
+            echo '<td>Table ' . esc_html($key) . '</td>';
+            echo '<td>' . esc_html($exists ? 'ok' : 'missing') . '</td>';
+            echo '<td>' . esc_html($count === null ? '-' : (string) $count) . '</td>';
+            echo '</tr>';
+        }
+
+        echo '<tr><td>Capability bressol_manage_purchasing</td><td>' . esc_html($capExists ? 'ok' : 'missing') . '</td><td>-</td></tr>';
+
+        foreach ($flags as $key => $value) {
+            echo '<tr><td>Flag ' . esc_html($key) . '</td><td>' . esc_html($value ? 'ON' : 'OFF') . '</td><td>-</td></tr>';
+        }
+
+        echo '<tr><td>Planning latest run</td><td>' . esc_html($latestExists ? 'yes' : 'no') . '</td><td>-</td></tr>';
+
+        echo '</tbody></table>';
+    }
+
+    private function render_diagnostics_actions(): void
+    {
+        echo '<h2>Actions</h2>';
+        echo '<div style="margin:12px 0;">';
+
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;margin-right:8px;">';
+        wp_nonce_field('bressol_purchasing_diagnostics_planning_run');
+        echo '<input type="hidden" name="action" value="bressol_purchasing_diagnostics_planning_run" />';
+        echo '<input type="hidden" name="mode" value="dry" />';
+        echo '<button type="submit" class="button">Run planning dry-run</button>';
+        echo '</form>';
+
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;margin-right:8px;">';
+        wp_nonce_field('bressol_purchasing_diagnostics_planning_run');
+        echo '<input type="hidden" name="action" value="bressol_purchasing_diagnostics_planning_run" />';
+        echo '<input type="hidden" name="mode" value="save" />';
+        echo '<button type="submit" class="button button-primary">Run planning save</button>';
+        echo '</form>';
+
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;">';
+        wp_nonce_field('bressol_purchasing_diagnostics_clear');
+        echo '<input type="hidden" name="action" value="bressol_purchasing_diagnostics_clear" />';
+        echo '<button type="submit" class="button">Clear last result</button>';
+        echo '</form>';
+
+        echo '</div>';
+    }
+
+    private function render_diagnostics_last_result(): void
+    {
+        $latest = $this->get_diagnostics_last_result();
+        echo '<h2>Last result</h2>';
+
+        if (!$latest) {
+            echo '<p>No diagnostics result yet.</p>';
+            return;
+        }
+
+        $generatedAt = (string) ($latest['generated_at_utc'] ?? '');
+        $inputs = $latest['inputs_available'] ?? [];
+        $suggestions = isset($latest['suggestions']) && is_array($latest['suggestions']) ? $latest['suggestions'] : [];
+        $notes = isset($latest['notes']) && is_array($latest['notes']) ? $latest['notes'] : [];
+
+        echo '<p><strong>Generated at (UTC):</strong> ' . esc_html($generatedAt) . '</p>';
+        echo '<p><strong>Inputs:</strong> ' . esc_html($this->format_inputs_available($inputs)) . '</p>';
+        echo '<p><strong>Suggestion count:</strong> ' . esc_html((string) ($latest['suggestion_count'] ?? count($suggestions))) . '</p>';
+
+        echo '<h3>Top suggestions (20)</h3>';
+        echo '<table class="widefat striped" style="max-width:1200px;">';
+        echo '<thead><tr><th>Key</th><th>Stock</th><th>Demand</th><th>Suggested</th><th>Rationale</th></tr></thead><tbody>';
+
+        if ($suggestions === []) {
+            echo '<tr><td colspan="5">No suggestions.</td></tr>';
+        } else {
+            foreach ($suggestions as $suggestion) {
+                $key = (string) ($suggestion['key'] ?? '');
+                $stock = (int) ($suggestion['stock_qty'] ?? 0);
+                $demand = (int) ($suggestion['demand_qty'] ?? 0);
+                $suggested = (int) ($suggestion['suggested_buy_qty'] ?? 0);
+                $rationale = (string) ($suggestion['rationale'] ?? '');
+
+                echo '<tr>';
+                echo '<td>' . esc_html($key) . '</td>';
+                echo '<td>' . esc_html((string) $stock) . '</td>';
+                echo '<td>' . esc_html((string) $demand) . '</td>';
+                echo '<td>' . esc_html((string) $suggested) . '</td>';
+                echo '<td>' . esc_html($rationale) . '</td>';
+                echo '</tr>';
+            }
+        }
+
+        echo '</tbody></table>';
+
+        if ($notes !== []) {
+            echo '<h3>Notes</h3>';
+            echo '<ul>';
+            foreach ($notes as $note) {
+                $note = is_string($note) ? $this->truncate_note($note) : '';
+                if ($note === '') {
+                    continue;
+                }
+                echo '<li>' . esc_html($note) . '</li>';
+            }
+            echo '</ul>';
+        }
+    }
+
     /** @param array<string, mixed> $latest */
     private function render_latest_run(array $latest): void
     {
@@ -878,5 +1054,17 @@ final class AdminPages
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $diff = $date->getTimestamp() - $now->getTimestamp();
         return (int) floor($diff / 86400);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function get_diagnostics_last_result(): ?array
+    {
+        $raw = get_option('bressol_purchasing_diagnostics_last_result', '');
+        if (!is_string($raw) || $raw === '') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : null;
     }
 }

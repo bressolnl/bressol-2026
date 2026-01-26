@@ -37,6 +37,8 @@ final class Actions
         add_action('admin_post_bressol_purchasing_change_po_status', [$this, 'handle_change_po_status']);
         add_action('admin_post_bressol_purchasing_create_receiving', [$this, 'handle_create_receiving']);
         add_action('admin_post_bressol_purchasing_planning_run', [$this, 'handle_planning_run']);
+        add_action('admin_post_bressol_purchasing_diagnostics_planning_run', [$this, 'handle_diagnostics_planning_run']);
+        add_action('admin_post_bressol_purchasing_diagnostics_clear', [$this, 'handle_diagnostics_clear']);
     }
 
     public function handle_add_supplier(): void
@@ -220,6 +222,49 @@ final class Actions
         $this->redirect_with_notice('bressol-purchasing-planning', 'planning_run_ok');
     }
 
+    public function handle_diagnostics_planning_run(): void
+    {
+        if (!$this->capabilities->current_user_can_sensitive()) {
+            $this->redirect_with_notice('bressol-purchasing-diagnostics', 'forbidden');
+        }
+
+        check_admin_referer('bressol_purchasing_diagnostics_planning_run');
+
+        $mode = isset($_POST['mode']) ? sanitize_text_field(wp_unslash($_POST['mode'])) : 'dry';
+        $dryRun = $mode !== 'save';
+
+        try {
+            $service = PurchasingModule::build_planning_service();
+            $payload = $service->run($dryRun);
+            $summary = $this->build_diagnostics_summary($payload);
+            update_option('bressol_purchasing_diagnostics_last_result', wp_json_encode($summary), false);
+
+            (new AuditLogger())->log('diagnostics_planning_run', [
+                'result' => $dryRun ? 'dry' : 'save',
+                'suggestion_count' => (int) ($summary['suggestion_count'] ?? 0),
+            ]);
+        } catch (\Throwable $exception) {
+            (new AuditLogger())->log('diagnostics_planning_error', [
+                'result' => 'exception',
+            ]);
+            $this->redirect_with_notice('bressol-purchasing-diagnostics', 'diagnostics_planning_failed');
+        }
+
+        $this->redirect_with_notice('bressol-purchasing-diagnostics', 'diagnostics_planning_ok');
+    }
+
+    public function handle_diagnostics_clear(): void
+    {
+        if (!$this->capabilities->current_user_can_sensitive()) {
+            $this->redirect_with_notice('bressol-purchasing-diagnostics', 'forbidden');
+        }
+
+        check_admin_referer('bressol_purchasing_diagnostics_clear');
+        delete_option('bressol_purchasing_diagnostics_last_result');
+
+        $this->redirect_with_notice('bressol-purchasing-diagnostics', 'diagnostics_cleared');
+    }
+
     private function handle_todo_action(string $nonceAction, string $page): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
@@ -243,6 +288,46 @@ final class Actions
         $url = add_query_arg($args, admin_url('admin.php'));
         wp_safe_redirect($url);
         exit;
+    }
+
+    /** @param array<string, mixed> $payload
+     *  @return array<string, mixed>
+     */
+    private function build_diagnostics_summary(array $payload): array
+    {
+        $summary = [
+            'generated_at_utc' => (string) ($payload['generated_at_utc'] ?? gmdate('Y-m-d H:i:s')),
+            'inputs_available' => $payload['inputs_available'] ?? [],
+            'suggestion_count' => is_array($payload['suggestions'] ?? null) ? count($payload['suggestions']) : 0,
+            'suggestions' => [],
+            'notes' => [],
+        ];
+
+        $suggestions = isset($payload['suggestions']) && is_array($payload['suggestions']) ? $payload['suggestions'] : [];
+        $top = array_slice($suggestions, 0, 20);
+        foreach ($top as $suggestion) {
+            $summary['suggestions'][] = [
+                'key' => isset($suggestion['key']) ? (string) $suggestion['key'] : '',
+                'stock_qty' => isset($suggestion['stock_qty']) ? (int) $suggestion['stock_qty'] : 0,
+                'demand_qty' => isset($suggestion['demand_qty']) ? (int) $suggestion['demand_qty'] : 0,
+                'suggested_buy_qty' => isset($suggestion['suggested_buy_qty']) ? (int) $suggestion['suggested_buy_qty'] : 0,
+                'rationale' => isset($suggestion['rationale']) ? (string) $suggestion['rationale'] : '',
+            ];
+        }
+
+        $notes = isset($payload['notes']) && is_array($payload['notes']) ? $payload['notes'] : [];
+        foreach ($notes as $note) {
+            $note = is_string($note) ? trim($note) : '';
+            if ($note === '') {
+                continue;
+            }
+            if (strlen($note) > 120) {
+                $note = substr($note, 0, 120) . '…';
+            }
+            $summary['notes'][] = $note;
+        }
+
+        return $summary;
     }
 
     private function supplier_form_args(int $supplierId): array
