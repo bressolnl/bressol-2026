@@ -1,0 +1,357 @@
+.bressol-pack-form {
+    margin: 16px 0;
+    padding: 16px;
+    border: 1px solid var(--bressol-border-soft, rgba(7, 12, 12, 0.12));
+    border-radius: 12px;
+    background: #fff;
+}
+
+.bressol-pack-form__header {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.bressol-pack-form__title {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.bressol-pack-form__hint {
+    margin: 0;
+    color: rgba(7, 12, 12, 0.68);
+    font-size: 0.9rem;
+}
+
+.bressol-pack-summary {
+    position: sticky;
+    top: 12px;
+    border: 1px solid var(--bressol-border-soft, rgba(7, 12, 12, 0.12));
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #fff;
+    margin: 16px 0;
+    z-index: 2;
+    max-height: min(360px, 60vh);
+    overflow: auto;
+}
+
+.bressol-pack-summary__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.bressol-pack-summary__title {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.bressol-pack-summary__toggle {
+    border: 0;
+    background: transparent;
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-decoration: underline;
+    color: rgba(7, 12, 12, 0.68);
+}
+
+.bressol-pack-summary__body {
+    margin-top: 12px;
+    display: grid;
+    gap: 10px;
+}
+
+.bressol-pack-summary.is-collapsed .bressol-pack-summary__body {
+    display: none;
+}
+
+.bressol-pack-summary__list {
+    display: grid;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: rgba(7, 12, 12, 0.68);
+}
+
+.bressol-pack-summary__group ul {
+    margin: 6px 0 0 16px;
+    padding: 0;
+    list-style: none;
+}
+
+.bressol-pack-summary__item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+}
+
+.bressol-pack-summary__thumb {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+.bressol-pack-summary__label {
+    color: rgba(7, 12, 12, 0.9);
+}
+
+.bressol-pack-summary__qty {
+    font-weight: 600;
+    color: rgba(7, 12, 12, 0.68);
+}
+
+.bressol-pack-summary__surcharge-line {
+    grid-column: 2 / -1;
+    font-size: 0.8rem;
+    color: rgba(7, 12, 12, 0.68);
+}
+
+.bressol-pack-summary__status {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: rgba(7, 12, 12, 0.68);
+}
+
+.bressol-pack-summary__prices {
+    display: grid;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+
+.bressol-pack-summary__prices div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.bressol-pack-summary__reset {
+    border: 1px solid var(--bressol-border-soft, rgba(7, 12, 12, 0.12));
+    background: transparent;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: rgba(7, 12, 12, 0.68);
+}
+
+.bressol-pack-wizard__back {
+    border: 1px solid var(--bressol-border-soft, rgba(7, 12, 12, 0.12));
+    background: transparent;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: rgba(7, 12, 12, 0.68);
+    justify-self: flex-start;
+}
+
+.bressol-pack-summary__empty {
+    margin: 0;
+    font-size: 0.85rem;
+    color: rgba(7, 12, 12, 0.68);
+}
+
+.bressol-pack-slot {
+    margin-top: 18px;
+}
+
+.bressol-pack-group {
+    scroll-margin-top: 120px;
+}
+
+.bressol-pack-step.is-hidden {
+    display: none;
+}
+
+.bressol-pack-step.is-active {
+    display: block;
+}
+
+.bressol-pack-slot__header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-bottom: 10px;
+}
+
+.bressol-pack-slot__title {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.bressol-pack-slot__hint {
+    margin: 0;
+    color: rgba(7, 12, 12, 0.68);
+    font-size: 0.85rem;
+}
+
+.bressol-pack-slot__count {
+    margin: 0;
+    font-size: 0.85rem;
+    color: rgba(7, 12, 12, 0.68);
+}
+
+.bressol-pack-slot__remaining {
+    margin: 0;
+    font-size: 0.8rem;
+    color: rgba(7, 12, 12, 0.68);
+}
+
+.bressol-pack-group__reset {
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    font-size: 0.8rem;
+    color: rgba(7, 12, 12, 0.68);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.bressol-pack-group__message {
+    margin: 6px 0 0;
+    font-size: 0.8rem;
+    color: rgba(7, 12, 12, 0.68);
+    min-height: 1.2em;
+}
+
+.bressol-pack-group__message.is-hint {
+    color: var(--bressol-color-accent);
+}
+.bressol-pack-carousel {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 4px 4px 12px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+}
+
+.bressol-pack-carousel::-webkit-scrollbar {
+    height: 6px;
+}
+
+.bressol-pack-carousel::-webkit-scrollbar-thumb {
+    background: rgba(7, 12, 12, 0.2);
+    border-radius: 999px;
+}
+
+.bressol-pack-card {
+    position: relative;
+    flex: 0 0 auto;
+    width: clamp(200px, 38vw, 260px);
+    scroll-snap-align: start;
+}
+
+.bressol-pack-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.bressol-pack-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 1px solid var(--bressol-border-soft, rgba(7, 12, 12, 0.12));
+    border-radius: 12px;
+    padding: 16px;
+    background: linear-gradient(180deg, #FFFFFF 0%, #FBFAF7 100%);
+    min-height: 100%;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.bressol-pack-card__media img {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+}
+
+.bressol-pack-card__title {
+    font-weight: 600;
+    font-size: 0.98rem;
+    color: #070C0C;
+}
+
+.bressol-pack-card__price {
+    font-size: 0.9rem;
+    color: #070C0C;
+}
+
+.bressol-pack-card__surcharge {
+    font-size: 0.85rem;
+    color: rgba(7, 12, 12, 0.68);
+}
+
+.bressol-pack-card__qty-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(188, 175, 74, 0.18);
+    border: 1px solid rgba(188, 175, 74, 0.4);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #070C0C;
+}
+
+.bressol-pack-qty {
+    display: grid;
+    grid-template-columns: 32px 1fr 32px;
+    align-items: center;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.bressol-pack-qty-input {
+    width: 100%;
+    text-align: center;
+    border: 1px solid var(--bressol-border-soft, rgba(7, 12, 12, 0.12));
+    border-radius: 8px;
+    padding: 6px 8px;
+}
+
+.bressol-pack-qty-btn {
+    border-radius: 999px;
+    border: 1px solid rgba(7, 12, 12, 0.2);
+    background: #fff;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+}
+
+.bressol-pack-input:checked + .bressol-pack-card__body,
+.bressol-pack-card.is-selected .bressol-pack-card__body {
+    border-color: var(--bressol-color-accent, #BCAF4A);
+    box-shadow: 0 12px 24px rgba(7, 12, 12, 0.12);
+    transform: translateY(-2px);
+}
+
+@media (max-width: 720px) {
+    .bressol-pack-card {
+        width: clamp(200px, 70vw, 280px);
+    }
+
+    .bressol-pack-summary {
+        position: static;
+        max-height: none;
+        overflow: visible;
+    }
+}
+
+@media (max-width: 420px) {
+    .bressol-pack-form {
+        padding: 12px;
+    }
+
+    .bressol-pack-card {
+        width: 75vw;
+    }
+}
