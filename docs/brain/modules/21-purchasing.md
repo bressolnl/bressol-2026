@@ -45,3 +45,9 @@ Cabecera: supplier_id (obligatorio), po_number (opcional, unico), status, custom
 Lineas: sku opcional, qty > 0, unit_cost_excl_tax_cents >= 0, line_total_excl_tax_cents = qty * unit_cost.
 Customs solo a nivel PO; shipping per product queda en otro modulo.
 Estados: draft, sent, confirmed, receiving, closed, cancelled (sin receivings ni inventario todavia).
+
+## Receivings MVP (v0.1)
+- Recepciones parciales por linea de PO.
+- No puede exceder el qty pendiente por linea (received total <= ordered).
+- Si un PO tiene receivings, sus lineas quedan bloqueadas para edicion.
+- Aun no impacta Inventory ni Cost Ledger (pendiente v0.2).

@@ -8,7 +8,9 @@ use Bressol\Modules\Purchasing\Services\Capabilities;
 use Bressol\Modules\Purchasing\Services\AuditLogger;
 use Bressol\Modules\Purchasing\Services\Ports\NullAdapters\NullCostLedgerWritePort;
 use Bressol\Modules\Purchasing\Repositories\PurchaseOrderRepository;
+use Bressol\Modules\Purchasing\Repositories\ReceivingRepository;
 use Bressol\Modules\Purchasing\Services\PurchaseOrderService;
+use Bressol\Modules\Purchasing\Services\ReceivingService;
 use Bressol\Modules\Purchasing\Services\SupplierService;
 
 if (!defined('ABSPATH')) {
@@ -32,6 +34,7 @@ final class Actions
         add_action('admin_post_bressol_purchasing_save_supplier', [$this, 'handle_save_supplier']);
         add_action('admin_post_bressol_purchasing_save_po', [$this, 'handle_save_po']);
         add_action('admin_post_bressol_purchasing_change_po_status', [$this, 'handle_change_po_status']);
+        add_action('admin_post_bressol_purchasing_create_receiving', [$this, 'handle_create_receiving']);
     }
 
     public function handle_add_supplier(): void
@@ -103,14 +106,17 @@ final class Actions
         ];
 
         $lines = $this->parse_po_lines($_POST);
+        $receivingRepository = new ReceivingRepository();
+        $allowLineUpdate = $poId <= 0 || $receivingRepository->count_receivings_for_po($poId) === 0;
 
         $service = new PurchaseOrderService(
             new PurchaseOrderRepository(),
             new SupplierRepository(),
+            $receivingRepository,
             new NullCostLedgerWritePort(),
             new AuditLogger()
         );
-        $result = $service->create_or_update_po($poId > 0 ? $poId : null, $header, $lines);
+        $result = $service->create_or_update_po($poId > 0 ? $poId : null, $header, $lines, $allowLineUpdate);
 
         if ($result instanceof \WP_Error) {
             $this->redirect_with_notice('bressol-purchasing-pos', 'po_save_failed', $this->po_form_args($poId));
@@ -143,6 +149,7 @@ final class Actions
         $service = new PurchaseOrderService(
             new PurchaseOrderRepository(),
             new SupplierRepository(),
+            new ReceivingRepository(),
             new NullCostLedgerWritePort(),
             new AuditLogger()
         );
@@ -153,6 +160,38 @@ final class Actions
         }
 
         $this->redirect_with_notice('bressol-purchasing-pos', 'po_status_changed', $this->po_form_args($poId));
+    }
+
+    public function handle_create_receiving(): void
+    {
+        if (!$this->capabilities->current_user_can_sensitive()) {
+            $this->redirect_with_notice('bressol-purchasing-receivings', 'forbidden');
+        }
+
+        check_admin_referer('bressol_purchasing_create_receiving');
+
+        $poId = isset($_POST['po_id']) ? absint($_POST['po_id']) : 0;
+        $receivedAt = isset($_POST['received_at']) ? wp_unslash($_POST['received_at']) : '';
+        $receivedAtUtc = $this->parse_received_at_utc(is_string($receivedAt) ? $receivedAt : '');
+        if ($receivedAtUtc === false) {
+            $this->redirect_with_notice('bressol-purchasing-receivings', 'receiving_save_failed', ['po_id' => $poId, 'view' => 'add']);
+        }
+
+        $note = isset($_POST['note']) ? wp_unslash($_POST['note']) : '';
+        $lines = $this->parse_receiving_lines($_POST);
+
+        $service = new ReceivingService(
+            new ReceivingRepository(),
+            new PurchaseOrderRepository(),
+            new AuditLogger()
+        );
+        $result = $service->create_receiving($poId, $receivedAtUtc ?: null, is_string($note) ? $note : null, $lines);
+
+        if ($result instanceof \WP_Error) {
+            $this->redirect_with_notice('bressol-purchasing-receivings', 'receiving_save_failed', ['po_id' => $poId, 'view' => 'add']);
+        }
+
+        $this->redirect_with_notice('bressol-purchasing-pos', 'receiving_saved', ['view' => 'edit', 'po_id' => $poId]);
     }
 
     private function handle_todo_action(string $nonceAction, string $page): void
@@ -264,5 +303,47 @@ final class Actions
         }
 
         return (int) round($float * 100);
+    }
+
+    /** @param array<string, mixed> $input
+     *  @return array<int, array<string, mixed>>
+     */
+    private function parse_receiving_lines(array $input): array
+    {
+        $lineIds = isset($input['receiving_po_line_id']) ? (array) $input['receiving_po_line_id'] : [];
+        $qtys = isset($input['receiving_qty']) ? (array) $input['receiving_qty'] : [];
+
+        $lines = [];
+        $count = max(count($lineIds), count($qtys));
+        for ($i = 0; $i < $count; $i++) {
+            $lineId = isset($lineIds[$i]) ? absint($lineIds[$i]) : 0;
+            $qtyRaw = isset($qtys[$i]) ? wp_unslash($qtys[$i]) : '';
+            $qty = is_numeric($qtyRaw) ? (int) $qtyRaw : 0;
+            if ($lineId <= 0 || $qty <= 0) {
+                continue;
+            }
+            $lines[] = [
+                'po_line_id' => $lineId,
+                'qty_received' => $qty,
+            ];
+        }
+
+        return $lines;
+    }
+
+    private function parse_received_at_utc(string $input)
+    {
+        $input = trim($input);
+        if ($input === '') {
+            return null;
+        }
+
+        $tz = function_exists('wp_timezone') ? wp_timezone() : new \DateTimeZone('UTC');
+        $date = \DateTimeImmutable::createFromFormat('Y-m-d\TH:i', $input, $tz);
+        if (!$date) {
+            return false;
+        }
+
+        return $date->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     }
 }

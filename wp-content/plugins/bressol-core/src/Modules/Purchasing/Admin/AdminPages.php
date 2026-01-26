@@ -6,6 +6,7 @@ namespace Bressol\Modules\Purchasing\Admin;
 use Bressol\Modules\Purchasing\Services\Capabilities;
 use Bressol\Modules\Purchasing\Domain\Enum\Status;
 use Bressol\Modules\Purchasing\Repositories\PurchaseOrderRepository;
+use Bressol\Modules\Purchasing\Repositories\ReceivingRepository;
 use Bressol\Modules\Purchasing\Repositories\SupplierRepository;
 
 if (!defined('ABSPATH')) {
@@ -124,13 +125,25 @@ final class AdminPages
     {
         $this->assert_can_manage();
 
+        $view = isset($_GET['view']) ? sanitize_text_field(wp_unslash($_GET['view'])) : '';
+        if ($view === 'add') {
+            $poId = isset($_GET['po_id']) ? absint($_GET['po_id']) : 0;
+            $this->renderReceivingForm($poId);
+            return;
+        }
+
+        $filters = [
+            'po_id' => isset($_GET['po_id']) ? absint($_GET['po_id']) : 0,
+            'search' => isset($_GET['s']) ? sanitize_text_field(wp_unslash($_GET['s'])) : '',
+        ];
+        $repository = new ReceivingRepository();
+        $rows = $repository->list_receivings(50, 0, $filters);
+
         echo '<div class="wrap">';
         echo '<h1>Purchasing - Receivings</h1>';
         $this->render_notice();
-
-        echo '<p class="description">Listado placeholder. Sin recepciones todavía.</p>';
-        $this->render_add_button('bressol_purchasing_add_receiving', 'bressol_purchasing_add_receiving_nonce');
-        $this->render_empty_table('Receivings');
+        $this->render_receivings_filters($filters);
+        $this->render_receivings_table($rows);
         echo '</div>';
     }
 
@@ -170,6 +183,14 @@ final class AdminPages
             $message = 'Estado actualizado.';
         } elseif ($notice === 'po_status_failed') {
             $message = 'No se pudo actualizar el estado.';
+            $type = 'notice-error';
+        } elseif ($notice === 'po_locked_has_receivings') {
+            $message = 'PO locked: has receivings. Lines cannot be edited.';
+            $type = 'notice-warning';
+        } elseif ($notice === 'receiving_saved') {
+            $message = 'Recepción creada.';
+        } elseif ($notice === 'receiving_save_failed') {
+            $message = 'No se pudo crear la recepción.';
             $type = 'notice-error';
         }
 
@@ -402,6 +423,9 @@ final class AdminPages
         $poRepository = new PurchaseOrderRepository();
         $po = $poId > 0 ? $poRepository->get_po($poId) : null;
         $lines = $poId > 0 ? $poRepository->get_po_lines($poId) : [];
+        $receivingRepository = new ReceivingRepository();
+        $receivingCount = $poId > 0 ? $receivingRepository->count_receivings_for_po($poId) : 0;
+        $receivedTotals = $poId > 0 ? $receivingRepository->get_received_totals_for_po($poId) : [];
 
         if ($poId > 0 && !$po) {
             $poId = 0;
@@ -414,10 +438,16 @@ final class AdminPages
         $taxRate = $po ? $po['tax_rate_bp'] : null;
         $status = $po ? (string) $po['status'] : Status::DRAFT;
         $warehouseCode = $po ? (string) $po['warehouse_code'] : 'ALICANTE';
+        $isLocked = $poId > 0 && $receivingCount > 0;
 
         echo '<div class="wrap">';
         echo '<h1>' . ($poId > 0 ? 'Editar Purchase Order' : 'Nuevo Purchase Order') . '</h1>';
         $this->render_notice();
+        if ($isLocked) {
+            echo '<p class="notice notice-warning" style="padding:8px 12px;">';
+            echo 'PO locked: has receivings. Lines cannot be edited.';
+            echo '</p>';
+        }
 
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         wp_nonce_field('bressol_purchasing_save_po');
@@ -457,13 +487,15 @@ final class AdminPages
         echo '<thead><tr><th>SKU</th><th>Qty</th><th>Unit cost (EUR)</th></tr></thead><tbody>';
 
         $rows = $lines;
-        $extraRows = 3;
-        for ($i = 0; $i < $extraRows; $i++) {
-            $rows[] = [
-                'sku' => '',
-                'qty' => '',
-                'unit_cost_excl_tax_cents' => '',
-            ];
+        if (!$isLocked) {
+            $extraRows = 3;
+            for ($i = 0; $i < $extraRows; $i++) {
+                $rows[] = [
+                    'sku' => '',
+                    'qty' => '',
+                    'unit_cost_excl_tax_cents' => '',
+                ];
+            }
         }
 
         foreach ($rows as $line) {
@@ -473,15 +505,32 @@ final class AdminPages
             $unitEuros = $unitCents === '' ? '' : $this->format_euros((int) $unitCents);
 
             echo '<tr>';
-            echo '<td><input type="text" name="line_sku[]" value="' . esc_attr($sku) . '" /></td>';
-            echo '<td><input type="number" min="1" name="line_qty[]" value="' . esc_attr((string) $qty) . '" /></td>';
-            echo '<td><input type="number" step="0.01" min="0" name="line_unit_cost_eur[]" value="' . esc_attr((string) $unitEuros) . '" /></td>';
+            if ($isLocked) {
+                echo '<td>' . esc_html($sku) . '</td>';
+                echo '<td>' . esc_html((string) $qty) . '</td>';
+                echo '<td>' . esc_html((string) $unitEuros) . '</td>';
+            } else {
+                echo '<td><input type="text" name="line_sku[]" value="' . esc_attr($sku) . '" /></td>';
+                echo '<td><input type="number" min="1" name="line_qty[]" value="' . esc_attr((string) $qty) . '" /></td>';
+                echo '<td><input type="number" step="0.01" min="0" name="line_unit_cost_eur[]" value="' . esc_attr((string) $unitEuros) . '" /></td>';
+            }
             echo '</tr>';
         }
 
         echo '</tbody></table>';
         echo '<p class="submit"><button type="submit" class="button button-primary">Guardar</button></p>';
         echo '</form>';
+
+        if ($poId > 0) {
+            echo '<h2>Receivings</h2>';
+            $this->render_po_receivings_summary($poId, $lines, $receivedTotals);
+            $addUrl = add_query_arg([
+                'page' => 'bressol-purchasing-receivings',
+                'view' => 'add',
+                'po_id' => $poId,
+            ], admin_url('admin.php'));
+            echo '<p><a class="button" href="' . esc_url($addUrl) . '">Add Receiving</a></p>';
+        }
 
         $backUrl = add_query_arg(['page' => 'bressol-purchasing-pos'], admin_url('admin.php'));
         echo '<p><a href="' . esc_url($backUrl) . '">&larr; Volver al listado</a></p>';
@@ -504,5 +553,167 @@ final class AdminPages
             return $code . ' - ' . $name;
         }
         return $name !== '' ? $name : $code;
+    }
+
+    /** @param array<string, mixed> $filters */
+    private function render_receivings_filters(array $filters): void
+    {
+        $poId = (int) ($filters['po_id'] ?? 0);
+        $search = (string) ($filters['search'] ?? '');
+
+        echo '<form method="get" style="margin:12px 0;">';
+        echo '<input type="hidden" name="page" value="bressol-purchasing-receivings" />';
+        echo '<input type="number" min="0" name="po_id" value="' . esc_attr((string) $poId) . '" placeholder="PO ID" /> ';
+        echo '<input type="text" name="s" value="' . esc_attr($search) . '" placeholder="PO number" /> ';
+        echo '<button class="button">Filtrar</button>';
+        echo '</form>';
+    }
+
+    /** @param array<int, array<string, mixed>> $rows */
+    private function render_receivings_table(array $rows): void
+    {
+        echo '<table class="widefat striped" style="max-width:1200px;">';
+        echo '<thead><tr>';
+        echo '<th>ID</th><th>PO</th><th>Supplier</th><th>Received at</th><th>Lines</th><th>Note</th><th>Created</th>';
+        echo '</tr></thead><tbody>';
+
+        if ($rows === []) {
+            echo '<tr><td colspan="7">No hay recepciones.</td></tr>';
+            echo '</tbody></table>';
+            return;
+        }
+
+        foreach ($rows as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            $poId = (int) ($row['po_id'] ?? 0);
+            $poNumber = (string) ($row['po_number'] ?? '');
+            $supplierCode = (string) ($row['supplier_code'] ?? '');
+            $supplierName = (string) ($row['supplier_name'] ?? '');
+            $receivedAt = (string) ($row['received_at_utc'] ?? '');
+            $linesCount = (int) ($row['lines_count'] ?? 0);
+            $note = $this->truncate_note((string) ($row['note'] ?? ''));
+            $created = (string) ($row['created_at_utc'] ?? '');
+
+            $poLabel = $poNumber !== '' ? $poNumber : ('PO #' . $poId);
+            $supplierLabel = $supplierCode !== '' ? $supplierCode : ('Supplier #' . ($row['supplier_id'] ?? ''));
+            if ($supplierName !== '') {
+                $supplierLabel .= ' - ' . $supplierName;
+            }
+
+            echo '<tr>';
+            echo '<td>' . esc_html((string) $id) . '</td>';
+            echo '<td>' . esc_html($poLabel) . '</td>';
+            echo '<td>' . esc_html($supplierLabel) . '</td>';
+            echo '<td>' . esc_html($receivedAt) . '</td>';
+            echo '<td>' . esc_html((string) $linesCount) . '</td>';
+            echo '<td>' . esc_html($note) . '</td>';
+            echo '<td>' . esc_html($created) . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+    }
+
+    /** @param array<int, array<string, mixed>> $lines
+     *  @param array<int, int> $receivedTotals
+     */
+    private function render_po_receivings_summary(int $poId, array $lines, array $receivedTotals): void
+    {
+        echo '<table class="widefat striped" style="max-width:1000px;">';
+        echo '<thead><tr>';
+        echo '<th>SKU</th><th>Ordered</th><th>Received</th><th>Remaining</th>';
+        echo '</tr></thead><tbody>';
+
+        if ($lines === []) {
+            echo '<tr><td colspan="4">PO sin líneas.</td></tr>';
+            echo '</tbody></table>';
+            return;
+        }
+
+        foreach ($lines as $line) {
+            $lineId = (int) ($line['id'] ?? 0);
+            $sku = (string) ($line['sku'] ?? '');
+            $ordered = (int) ($line['qty'] ?? 0);
+            $received = isset($receivedTotals[$lineId]) ? (int) $receivedTotals[$lineId] : 0;
+            $remaining = max(0, $ordered - $received);
+
+            echo '<tr>';
+            echo '<td>' . esc_html($sku) . '</td>';
+            echo '<td>' . esc_html((string) $ordered) . '</td>';
+            echo '<td>' . esc_html((string) $received) . '</td>';
+            echo '<td>' . esc_html((string) $remaining) . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+    }
+
+    private function renderReceivingForm(int $poId): void
+    {
+        $poRepository = new PurchaseOrderRepository();
+        $po = $poId > 0 ? $poRepository->get_po($poId) : null;
+        if ($poId <= 0 || !$po) {
+            echo '<div class="wrap"><p>PO inválido.</p></div>';
+            return;
+        }
+
+        $lines = $poRepository->get_po_lines($poId);
+        $receivingRepository = new ReceivingRepository();
+        $receivedTotals = $receivingRepository->get_received_totals_for_po($poId);
+
+        echo '<div class="wrap">';
+        echo '<h1>Nuevo Receiving</h1>';
+        $this->render_notice();
+
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        wp_nonce_field('bressol_purchasing_create_receiving');
+        echo '<input type="hidden" name="action" value="bressol_purchasing_create_receiving" />';
+        echo '<input type="hidden" name="po_id" value="' . esc_attr((string) $poId) . '" />';
+        echo '<table class="form-table">';
+        echo '<tr><th>Received at</th><td><input type="datetime-local" name="received_at" value="" /></td></tr>';
+        echo '<tr><th>Note</th><td><input type="text" name="note" value="" maxlength="200" /></td></tr>';
+        echo '</table>';
+
+        echo '<table class="widefat striped" style="max-width:1000px;">';
+        echo '<thead><tr><th>SKU</th><th>Ordered</th><th>Received</th><th>Remaining</th><th>Qty to receive</th></tr></thead><tbody>';
+
+        foreach ($lines as $line) {
+            $lineId = (int) ($line['id'] ?? 0);
+            $sku = (string) ($line['sku'] ?? '');
+            $ordered = (int) ($line['qty'] ?? 0);
+            $received = isset($receivedTotals[$lineId]) ? (int) $receivedTotals[$lineId] : 0;
+            $remaining = max(0, $ordered - $received);
+
+            echo '<tr>';
+            echo '<td>' . esc_html($sku) . '</td>';
+            echo '<td>' . esc_html((string) $ordered) . '</td>';
+            echo '<td>' . esc_html((string) $received) . '</td>';
+            echo '<td>' . esc_html((string) $remaining) . '</td>';
+            echo '<td>';
+            echo '<input type="hidden" name="receiving_po_line_id[]" value="' . esc_attr((string) $lineId) . '" />';
+            echo '<input type="number" min="0" max="' . esc_attr((string) $remaining) . '" name="receiving_qty[]" value="0" />';
+            echo '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+        echo '<p class="submit"><button type="submit" class="button button-primary">Crear recepción</button></p>';
+        echo '</form>';
+
+        $backUrl = add_query_arg(['page' => 'bressol-purchasing-pos', 'view' => 'edit', 'po_id' => $poId], admin_url('admin.php'));
+        echo '<p><a href="' . esc_url($backUrl) . '">&larr; Volver al PO</a></p>';
+        echo '</div>';
+    }
+
+    private function truncate_note(string $note): string
+    {
+        $note = trim($note);
+        if ($note === '') {
+            return '';
+        }
+        if (strlen($note) <= 60) {
+            return $note;
+        }
+        return substr($note, 0, 60) . '…';
     }
 }

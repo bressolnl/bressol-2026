@@ -6,6 +6,7 @@ namespace Bressol\Modules\Purchasing\Services;
 use Bressol\Modules\Purchasing\Domain\Enum\Status;
 use Bressol\Modules\Purchasing\Repositories\SupplierRepository;
 use Bressol\Modules\Purchasing\Repositories\PurchaseOrderRepository;
+use Bressol\Modules\Purchasing\Repositories\ReceivingRepository;
 use Bressol\Modules\Purchasing\Services\Ports\CostLedgerWritePort;
 
 if (!defined('ABSPATH')) {
@@ -16,17 +17,20 @@ final class PurchaseOrderService
 {
     private PurchaseOrderRepository $repository;
     private SupplierRepository $supplierRepository;
+    private ReceivingRepository $receivingRepository;
     private CostLedgerWritePort $costLedgerPort;
     private AuditLogger $auditLogger;
 
     public function __construct(
         PurchaseOrderRepository $repository,
         SupplierRepository $supplierRepository,
+        ReceivingRepository $receivingRepository,
         CostLedgerWritePort $costLedgerPort,
         AuditLogger $auditLogger
     ) {
         $this->repository = $repository;
         $this->supplierRepository = $supplierRepository;
+        $this->receivingRepository = $receivingRepository;
         $this->costLedgerPort = $costLedgerPort;
         $this->auditLogger = $auditLogger;
     }
@@ -56,22 +60,27 @@ final class PurchaseOrderService
      *  @param array<int, array<string, mixed>> $lines
      *  @return int|true|\WP_Error
      */
-    public function create_or_update_po(?int $id, array $header, array $lines)
+    public function create_or_update_po(?int $id, array $header, array $lines, bool $allowLineUpdate = true)
     {
         $normalizedHeader = $this->validate_normalize_po_header($header);
         if ($normalizedHeader instanceof \WP_Error) {
             return $normalizedHeader;
         }
 
-        $normalizedLines = $this->validate_normalize_lines($lines);
-        if ($normalizedLines instanceof \WP_Error) {
-            return $normalizedLines;
-        }
-
         $nowUtc = gmdate('Y-m-d H:i:s');
-        $totals = $this->compute_totals($normalizedLines, (int) $normalizedHeader['customs_fees_cents']);
 
         if ($id === null || $id <= 0) {
+            if (!$allowLineUpdate) {
+                return new \WP_Error('po_lines_required', 'Líneas requeridas.');
+            }
+
+            $normalizedLines = $this->validate_normalize_lines($lines);
+            if ($normalizedLines instanceof \WP_Error) {
+                return $normalizedLines;
+            }
+
+            $totals = $this->compute_totals($normalizedLines, (int) $normalizedHeader['customs_fees_cents']);
+
             if ($normalizedHeader['po_number'] !== null) {
                 $existingNumber = $this->repository->get_po_by_number((string) $normalizedHeader['po_number']);
                 if ($existingNumber) {
@@ -106,6 +115,10 @@ final class PurchaseOrderService
             return new \WP_Error('po_not_found', 'PO no encontrado.');
         }
 
+        if ($allowLineUpdate && $this->receivingRepository->count_receivings_for_po($id) > 0) {
+            return new \WP_Error('po_locked_has_receivings', 'PO bloqueado por recepciones.');
+        }
+
         if ($normalizedHeader['po_number'] !== null) {
             $existingNumber = $this->repository->get_po_by_number((string) $normalizedHeader['po_number']);
             if ($existingNumber && (int) $existingNumber['id'] !== $id) {
@@ -120,11 +133,21 @@ final class PurchaseOrderService
             return new \WP_Error('po_update_failed', 'No se pudo actualizar el PO.');
         }
 
-        $linesWithMeta = $this->lines_with_meta($normalizedLines, $nowUtc);
-        if (!$this->repository->replace_po_lines($id, $linesWithMeta)) {
-            return new \WP_Error('po_lines_failed', 'No se pudieron guardar las líneas.');
+        $linesWithMeta = [];
+        if ($allowLineUpdate) {
+            $normalizedLines = $this->validate_normalize_lines($lines);
+            if ($normalizedLines instanceof \WP_Error) {
+                return $normalizedLines;
+            }
+            $linesWithMeta = $this->lines_with_meta($normalizedLines, $nowUtc);
+            if (!$this->repository->replace_po_lines($id, $linesWithMeta)) {
+                return new \WP_Error('po_lines_failed', 'No se pudieron guardar las líneas.');
+            }
+        } else {
+            $linesWithMeta = $this->repository->get_po_lines($id);
         }
 
+        $totals = $this->compute_totals($linesWithMeta, (int) $normalizedHeader['customs_fees_cents']);
         $this->auditLogger->log('po_updated', [
             'po_id' => $id,
             'supplier_id' => $normalizedHeader['supplier_id'],
