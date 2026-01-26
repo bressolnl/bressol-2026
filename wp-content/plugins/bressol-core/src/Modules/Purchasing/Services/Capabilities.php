@@ -29,6 +29,11 @@ final class Capabilities
             && current_user_can($this->get_sensitive_capability());
     }
 
+    public function current_user_can_sensitive(): bool
+    {
+        return current_user_can($this->get_sensitive_capability());
+    }
+
     public static function ensure_caps_registered(): void
     {
         if (!is_admin() || !function_exists('wp_roles')) {

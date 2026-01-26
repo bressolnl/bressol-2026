@@ -40,7 +40,7 @@ final class PurchasingCron
             return;
         }
 
-        $this->auditLogger->log('reminder_run', [
+        $this->auditLogger->log('purchasing_reminder_run', [
             'result' => 'empty',
             'window_weeks' => 6,
             'reminder_weeks_before' => 3,

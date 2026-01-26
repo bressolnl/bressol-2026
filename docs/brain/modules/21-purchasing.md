@@ -17,7 +17,7 @@ Gestiona proveedores, purchase orders y recepciones en una operativa de compras 
 - `unit_cost_excl_tax_cents` en linea (precio sin IVA).
 - `tax_rate_bp` opcional (solo referencia fiscal, sin calculo aqui).
 - `customs_fees_cents` a nivel de PO (sin prorrateo por ahora).
-- Shipping por producto se calcula en otro modulo (no duplicar).
+- Shipping por producto se calcula en otro modulo; aqui solo customs/handling.
 - Fechas en DB en UTC; mostrar en Europe/Amsterdam cuando aplique.
 
 ## Ubicacion

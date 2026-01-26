@@ -43,6 +43,7 @@ final class PurchasingModule implements ModuleInterface
         }
 
         if (defined('WP_CLI') && WP_CLI && class_exists('\\WP_CLI')) {
+            Installer::maybe_upgrade();
             \WP_CLI::add_command('bressol purchasing self-test', new SelfTestCommand(
                 $this->capabilities,
                 $this->settings

@@ -20,7 +20,7 @@ final class AdminPages
 
     public function registerMenus(): void
     {
-        $capability = $this->capabilities->get_base_capability();
+        $capability = $this->capabilities->get_sensitive_capability();
 
         add_submenu_page(
             'bressol',

@@ -30,6 +30,7 @@ final class Schema
 
     public static function purchase_orders_table_sql(string $table, string $charsetCollate): string
     {
+        // Note: UNIQUE on nullable po_number allows multiple NULLs in MySQL.
         return "CREATE TABLE {$table} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             po_number VARCHAR(64) NULL,

@@ -42,7 +42,7 @@ final class Actions
 
     private function handle_todo_action(string $nonceAction, string $page): void
     {
-        if (!$this->capabilities->current_user_can_manage()) {
+        if (!$this->capabilities->current_user_can_sensitive()) {
             $this->redirect_with_notice($page, 'forbidden');
         }
 
