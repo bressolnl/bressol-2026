@@ -43,6 +43,10 @@ final class CrmModule implements ModuleInterface
 
             $adminPages = new AdminPages($settings, $customerService, $pointsService, $auditLogger, $importer, $timelineService);
             add_action('admin_menu', [$adminPages, 'registerMenus']);
+            add_action('admin_init', [$this, 'debugAdminAccess']);
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                add_filter('user_has_cap', [$this, 'debugBypassAccess'], 10, 4);
+            }
         }
 
         if (class_exists('WooCommerce')) {
@@ -151,6 +155,65 @@ final class CrmModule implements ModuleInterface
                 'customer_id' => $customerId,
             ]);
         }
+    }
+
+    public function debugAdminAccess(): void
+    {
+        if (!defined('WP_DEBUG') || !WP_DEBUG) {
+            return;
+        }
+
+        if (!$this->isCrmAdminPage()) {
+            return;
+        }
+
+        $user = wp_get_current_user();
+        $roles = $user ? $user->roles : [];
+        $cap = Capabilities::CAP;
+
+        error_log('[Bressol CRM] Access debug: ' . wp_json_encode([
+            'user_id' => $user ? $user->ID : 0,
+            'roles' => $roles,
+            'cap' => $cap,
+            'current_user_can_cap' => current_user_can($cap),
+            'current_user_can_manage_options' => current_user_can('manage_options'),
+            'current_user_can_manage_woocommerce' => current_user_can('manage_woocommerce'),
+        ]));
+    }
+
+    /**
+     * TODO: remove debug bypass once caps are fixed.
+     *
+     * @param array<string, bool> $allcaps
+     * @param array<int, string> $caps
+     * @param array<int, mixed> $args
+     */
+    public function debugBypassAccess(array $allcaps, array $caps, array $args, \WP_User $user): array
+    {
+        if (!defined('WP_DEBUG') || !WP_DEBUG) {
+            return $allcaps;
+        }
+
+        if (!$this->isCrmAdminPage()) {
+            return $allcaps;
+        }
+
+        if (!$user->exists() || !in_array('administrator', $user->roles, true)) {
+            return $allcaps;
+        }
+
+        $allcaps[Capabilities::CAP] = true;
+        return $allcaps;
+    }
+
+    private function isCrmAdminPage(): bool
+    {
+        if (!is_admin() || !isset($_GET['page'])) {
+            return false;
+        }
+
+        $page = sanitize_key(wp_unslash($_GET['page']));
+        return str_starts_with($page, 'bressol_crm');
     }
 
     private function is_pos_order(object $order): bool

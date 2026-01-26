@@ -11,15 +11,22 @@ final class Capabilities
 {
     public const CAP = 'bressol_manage_crm';
 
+    /** Back-compat alias (Installer used seed_roles historically). */
+    public function seed_roles(): void
+    {
+        $this->seed_admin_cap();
+    }
+
     public function register(): void
     {
-        add_action('admin_init', [$this, 'seed_admin_cap']);
-        add_filter('map_meta_cap', [$this, 'map_meta_cap'], 10, 4);
+        // Must run BEFORE wp-admin capability checks for admin pages.
+        // admin_init is too late -> causes "Sorry, you are not allowed..."
+        add_action('init', [$this, 'seed_admin_cap'], 1);
     }
 
     public function seed_admin_cap(): void
     {
-        if (!is_admin() || !function_exists('wp_roles')) {
+        if (!function_exists('wp_roles')) {
             return;
         }
 
@@ -32,19 +39,5 @@ final class Capabilities
         if ($role && !$role->has_cap(self::CAP)) {
             $role->add_cap(self::CAP);
         }
-    }
-
-    /** @param array<int, string> $caps */
-    public function map_meta_cap(array $caps, string $cap, int $userId, array $args): array
-    {
-        if ($cap !== self::CAP) {
-            return $caps;
-        }
-
-        if (user_can($userId, 'manage_options') || user_can($userId, 'manage_woocommerce')) {
-            return [];
-        }
-
-        return ['do_not_allow'];
     }
 }

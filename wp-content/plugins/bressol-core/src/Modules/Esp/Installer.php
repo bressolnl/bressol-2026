@@ -3,12 +3,24 @@ declare(strict_types=1);
 
 namespace Bressol\Modules\Esp;
 
+use Bressol\Modules\Esp\Services\Capabilities;
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
 final class Installer
 {
+    public const VERSION = '1.0.0';
+
+    public static function maybe_upgrade(): void
+    {
+        $installed = (string) get_option('bressol_esp_version', '');
+        if ($installed === '' || version_compare($installed, self::VERSION, '<')) {
+            self::install();
+        }
+    }
+
     public static function install(): void
     {
         global $wpdb;
@@ -156,5 +168,8 @@ final class Installer
         foreach ($tables as $tableSql) {
             dbDelta($tableSql);
         }
+
+        (new Capabilities())->seed_admin_cap();
+        update_option('bressol_esp_version', self::VERSION);
     }
 }

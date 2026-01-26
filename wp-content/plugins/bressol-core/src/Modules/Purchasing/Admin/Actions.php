@@ -235,6 +235,10 @@ final class Actions
         $runId = isset($_POST['run_id']) ? sanitize_text_field(wp_unslash($_POST['run_id'])) : '';
         $includePositive = !empty($_POST['include_positive']);
 
+        if ($supplierId <= 0) {
+            $this->redirect_with_notice('bressol_purchasing_planning', 'planning_po_failed');
+        }
+
         $store = new \Bressol\Modules\Purchasing\Services\PlanningStore();
         $latest = $store->get_latest();
         if (!$latest || $runId === '' || (string) ($latest['run_id'] ?? '') !== $runId) {
@@ -248,6 +252,11 @@ final class Actions
             $this->redirect_with_notice('bressol_purchasing_planning', 'planning_po_exists', [
                 'po_id' => (int) $existing,
             ]);
+        }
+
+        $supplierRepository = new SupplierRepository();
+        if (!$supplierRepository->get_supplier($supplierId)) {
+            $this->redirect_with_notice('bressol_purchasing_planning', 'planning_po_failed');
         }
 
         $suggestions = isset($latest['suggestions']) && is_array($latest['suggestions']) ? $latest['suggestions'] : [];
@@ -283,14 +292,15 @@ final class Actions
         $poId = (int) $result;
         update_option($idempotencyKey, (string) $poId, false);
 
-        (new AuditLogger())->log('planning_po_draft_created', [
+        (new AuditLogger())->log('purchasing_planning_po_draft_created', [
             'po_id' => $poId,
             'supplier_id' => $supplierId,
             'line_count' => count($lines),
             'run_id' => $runId,
         ], $poId, 'purchase_order');
 
-        $this->redirect_with_notice('bressol_purchasing_planning', 'planning_po_created', [
+        $this->redirect_with_notice('bressol_purchasing_pos', 'planning_po_created', [
+            'view' => 'edit',
             'po_id' => $poId,
         ]);
     }
@@ -422,9 +432,14 @@ final class Actions
                 continue;
             }
 
+            $suggested = (int) ($suggestion['suggested_buy_qty'] ?? 0);
+            if ($includePositive && $suggested <= 0) {
+                continue;
+            }
+
             $qtyRaw = isset($lineQty[$index]) ? wp_unslash($lineQty[$index]) : '';
             $qty = is_numeric($qtyRaw) ? (int) $qtyRaw : 0;
-            if ($includePositive && $qty <= 0) {
+            if ($qty <= 0) {
                 continue;
             }
 
@@ -446,8 +461,7 @@ final class Actions
 
     private function audit_planning_po_skipped(string $runId, int $existingPoId): void
     {
-        (new AuditLogger())->log('planning_po_draft_skipped_already_created', [
-            'po_id' => $existingPoId,
+        (new AuditLogger())->log('purchasing_planning_po_draft_skipped_already_created', [
             'existing_po_id' => $existingPoId,
             'run_id' => $runId,
         ], $existingPoId, 'purchase_order');

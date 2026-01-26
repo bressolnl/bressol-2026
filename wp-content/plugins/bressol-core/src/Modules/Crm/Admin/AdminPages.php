@@ -49,21 +49,21 @@ final class AdminPages
             'CRM',
             'CRM',
             $capability,
-            'bressol-crm',
+            'bressol_crm',
             [$this, 'renderCustomersPage']
         );
 
         add_submenu_page(
-            'bressol-crm',
+            'bressol_crm',
             'Clientes',
             'Clientes',
             $capability,
-            'bressol-crm',
+            'bressol_crm',
             [$this, 'renderCustomersPage']
         );
 
         add_submenu_page(
-            'bressol-crm',
+            'bressol_crm',
             'Ledger puntos',
             'Ledger',
             $capability,
@@ -72,7 +72,7 @@ final class AdminPages
         );
 
         add_submenu_page(
-            'bressol-crm',
+            'bressol_crm',
             'Redenciones',
             'Redenciones',
             $capability,
@@ -81,7 +81,7 @@ final class AdminPages
         );
 
         add_submenu_page(
-            'bressol-crm',
+            'bressol_crm',
             'Ajustes CRM',
             'Ajustes',
             $capability,
@@ -149,7 +149,7 @@ final class AdminPages
 
         foreach ($customers as $customer) {
             $detailUrl = add_query_arg([
-                'page' => 'bressol-crm',
+                'page' => 'bressol_crm',
                 'customer_id' => $customer->id,
             ], admin_url('admin.php'));
 
@@ -168,7 +168,7 @@ final class AdminPages
         echo '</tbody></table>';
 
         $this->renderPagination($paged, $limit, $total, [
-            'page' => 'bressol-crm',
+            'page' => 'bressol_crm',
             'crm_email' => $filters['email'],
             'crm_type' => $filters['type'],
             'crm_include_deleted' => $filters['include_deleted'] ? '1' : '',
@@ -718,7 +718,7 @@ final class AdminPages
             }
 
             $redirectArgs = [
-                'page' => 'bressol-crm',
+                'page' => 'bressol_crm',
                 'import_statuses' => $status,
                 'import_after' => $after,
                 'import_before' => $before,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bressol\Modules\Esp;
 
 use Bressol\Core\ModuleInterface;
+use Bressol\Modules\Esp\AdminPages;
 use Bressol\Modules\Esp\Services\Capabilities;
 
 if (!defined('ABSPATH')) {
@@ -21,6 +22,7 @@ final class EspModule implements ModuleInterface
     public function register(): void
     {
         (new Capabilities())->register();
+        Installer::maybe_upgrade();
         add_action('init', [$this, 'handleOpenTracking']);
         add_action('init', [$this, 'handleClickTracking']);
         add_action('init', [$this, 'handleUnsubscribe']);
@@ -31,6 +33,10 @@ final class EspModule implements ModuleInterface
 
         if (is_admin()) {
             add_action('admin_menu', [$this, 'registerAdminMenu']);
+            add_action('admin_init', [$this, 'debugAdminAccess']);
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                add_filter('user_has_cap', [$this, 'debugBypassAccess'], 10, 4);
+            }
         }
     }
 
@@ -1103,6 +1109,13 @@ final class EspModule implements ModuleInterface
 
     public function registerAdminMenu(): void
     {
+        if (!class_exists(AdminPages::class)) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[Bressol ESP] AdminPages class not found. Menú ESP no registrado.');
+            }
+            return;
+        }
+
         $capability = Capabilities::CAP;
 
         add_submenu_page(
@@ -1110,98 +1123,157 @@ final class EspModule implements ModuleInterface
             'Bressol ESP',
             'Bressol ESP',
             $capability,
-            'bressol-esp',
+            'bressol_esp',
             [AdminPages::class, 'renderOverview']
         );
 
         add_submenu_page(
-            'bressol-esp',
+            'bressol',
             'Campañas',
             'Campañas',
             $capability,
-            'bressol-esp-campaigns',
+            'bressol_esp_campaigns',
             [AdminPages::class, 'renderCampaigns']
         );
 
         add_submenu_page(
-            'bressol-esp',
+            'bressol',
             'Plantillas',
             'Plantillas',
             $capability,
-            'bressol-esp-templates',
+            'bressol_esp_templates',
             [AdminPages::class, 'renderTemplates']
         );
 
         add_submenu_page(
-            'bressol-esp',
+            'bressol',
             'Segmentos',
             'Segmentos',
             $capability,
-            'bressol-esp-segments',
+            'bressol_esp_segments',
             [AdminPages::class, 'renderSegments']
         );
 
         add_submenu_page(
-            'bressol-esp',
+            'bressol',
             'Emails manuales',
             'Emails manuales',
             $capability,
-            'bressol-esp-manual',
+            'bressol_esp_manual',
             [AdminPages::class, 'renderManualEmails']
         );
 
         add_submenu_page(
-            'bressol-esp',
+            'bressol',
             'Métricas',
             'Métricas',
             $capability,
-            'bressol-esp-metrics',
+            'bressol_esp_metrics',
             [AdminPages::class, 'renderMetrics']
         );
 
         add_submenu_page(
-            'bressol-esp',
+            'bressol',
             'Consentimientos',
             'Consentimientos',
             $capability,
-            'bressol-esp-consents',
+            'bressol_esp_consents',
             [AdminPages::class, 'renderConsents']
         );
 
         add_submenu_page(
-            'bressol-esp',
+            'bressol',
             'Exportaciones',
             'Exportaciones',
             $capability,
-            'bressol-esp-exports',
+            'bressol_esp_exports',
             [AdminPages::class, 'renderExports']
         );
 
         add_submenu_page(
-            'bressol-esp',
+            'bressol',
             'Cola de envíos',
             'Cola de envíos',
             $capability,
-            'bressol-esp-queue',
+            'bressol_esp_queue',
             [AdminPages::class, 'renderQueue']
         );
 
         add_submenu_page(
-            'bressol-esp',
+            'bressol',
             'Configuración SMTP',
             'Configuración SMTP',
             $capability,
-            'bressol-esp-settings',
+            'bressol_esp_settings',
             [AdminPages::class, 'renderSettings']
         );
 
         add_submenu_page(
-            'bressol-esp',
+            'bressol',
             'Auditoría',
             'Auditoría',
             $capability,
-            'bressol-esp-audit',
+            'bressol_esp_audit',
             [AdminPages::class, 'renderAudit']
         );
+    }
+
+    public function debugAdminAccess(): void
+    {
+        if (!defined('WP_DEBUG') || !WP_DEBUG) {
+            return;
+        }
+
+        if (!$this->isEspAdminPage()) {
+            return;
+        }
+
+        $user = wp_get_current_user();
+        $roles = $user ? $user->roles : [];
+        $cap = Capabilities::CAP;
+
+        error_log('[Bressol ESP] Access debug: ' . wp_json_encode([
+            'user_id' => $user ? $user->ID : 0,
+            'roles' => $roles,
+            'cap' => $cap,
+            'current_user_can_cap' => current_user_can($cap),
+            'current_user_can_manage_options' => current_user_can('manage_options'),
+            'current_user_can_manage_woocommerce' => current_user_can('manage_woocommerce'),
+        ]));
+    }
+
+    /**
+     * TODO: remove debug bypass once caps are fixed.
+     *
+     * @param array<string, bool> $allcaps
+     * @param array<int, string> $caps
+     * @param array<int, mixed> $args
+     */
+    public function debugBypassAccess(array $allcaps, array $caps, array $args, \WP_User $user): array
+    {
+        if (!defined('WP_DEBUG') || !WP_DEBUG) {
+            return $allcaps;
+        }
+
+        if (!$this->isEspAdminPage()) {
+            return $allcaps;
+        }
+
+        if (!$user->exists() || !in_array('administrator', $user->roles, true)) {
+            return $allcaps;
+        }
+
+        $allcaps[Capabilities::CAP] = true;
+        return $allcaps;
+    }
+
+    private function isEspAdminPage(): bool
+    {
+        if (!is_admin() || !isset($_GET['page'])) {
+            return false;
+        }
+
+        $page = sanitize_key(wp_unslash($_GET['page']));
+        return str_starts_with($page, 'bressol_esp');
     }
 }

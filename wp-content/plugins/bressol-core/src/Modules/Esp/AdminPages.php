@@ -36,7 +36,8 @@ final class AdminPages
 
     public static function renderCampaigns(): void
     {
-        self::renderHeader('Campañas');
+        self::renderHeader('');
+        self::renderView('campaigns');
         self::handleCampaignDelete();
         self::handleCampaignSubmit();
 
@@ -48,7 +49,8 @@ final class AdminPages
 
     public static function renderTemplates(): void
     {
-        self::renderHeader('Plantillas');
+        self::renderHeader('');
+        self::renderView('templates');
         self::handleTemplateDelete();
         self::handleTemplateSubmit();
 
@@ -60,7 +62,8 @@ final class AdminPages
 
     public static function renderSegments(): void
     {
-        self::renderHeader('Segmentos');
+        self::renderHeader('');
+        self::renderView('segments');
         self::handleSegmentDelete();
         self::handleSegmentSubmit();
 
@@ -72,7 +75,8 @@ final class AdminPages
 
     public static function renderManualEmails(): void
     {
-        self::renderHeader('Emails manuales');
+        self::renderHeader('');
+        self::renderView('manual');
         self::handleManualEmailSubmit();
 
         echo '<p>Emails 1-a-1 para post-compra y envío. Un solo idioma por email, elegido manualmente.</p>';
@@ -83,7 +87,8 @@ final class AdminPages
 
     public static function renderMetrics(): void
     {
-        self::renderHeader('Métricas');
+        self::renderHeader('');
+        self::renderView('metrics');
         self::handleMetricsExport();
 
         echo '<p>Métricas de aperturas, clicks y bajas con gráficos. Aplica a campañas y emails manuales.</p>';
@@ -95,7 +100,8 @@ final class AdminPages
 
     public static function renderConsents(): void
     {
-        self::renderHeader('Consentimientos');
+        self::renderHeader('');
+        self::renderView('consents');
         self::handleConsentsAction();
         self::handleConsentsSubmit();
         echo '<p>Gestión de consentimientos y lista de exclusión para cumplimiento RGPD/LSSI.</p>';
@@ -106,14 +112,16 @@ final class AdminPages
 
     public static function renderExports(): void
     {
-        self::renderHeader('Exportaciones');
+        self::renderHeader('');
+        self::renderView('exports');
         echo '<p>Exportación de métricas y eventos en CSV.</p>';
         self::renderFooter();
     }
 
     public static function renderQueue(): void
     {
-        self::renderHeader('Cola de envíos');
+        self::renderHeader('');
+        self::renderView('queue');
         self::handleQueueSubmit();
         self::handleQueueSchedule();
 
@@ -125,7 +133,8 @@ final class AdminPages
 
     public static function renderSettings(): void
     {
-        self::renderHeader('Configuración SMTP');
+        self::renderHeader('');
+        self::renderView('settings');
         self::handleSmtpSettingsSubmit();
         echo '<p>Configuración del servidor SMTP propio (perfil único) y límites de envío.</p>';
         self::renderSmtpSettingsForm();
@@ -134,7 +143,8 @@ final class AdminPages
 
     public static function renderAudit(): void
     {
-        self::renderHeader('Auditoría');
+        self::renderHeader('');
+        self::renderView('audit');
         echo '<p>Auditoría de acciones: quién crea, edita y envía campañas o emails manuales.</p>';
         self::renderAuditTable();
         self::renderFooter();
@@ -143,12 +153,22 @@ final class AdminPages
     private static function renderHeader(string $title): void
     {
         echo '<div class="wrap">';
-        echo '<h1>' . esc_html($title) . '</h1>';
+        if ($title !== '') {
+            echo '<h1>' . esc_html($title) . '</h1>';
+        }
     }
 
     private static function renderFooter(): void
     {
         echo '</div>';
+    }
+
+    private static function renderView(string $view): void
+    {
+        $path = __DIR__ . '/Admin/views/' . $view . '.php';
+        if (is_file($path)) {
+            include $path;
+        }
     }
 
     private static function handleSmtpSettingsSubmit(): void
