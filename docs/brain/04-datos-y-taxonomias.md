@@ -99,9 +99,7 @@ POS (metas de pedido)
   - `_bressol_stock_reduced`
 
 MarketsEvents (metas de pedido)
-- `_bressol_event_id`
-
-POS (tablas)
+- `_bressol_event_id`POS (tablas)
 Prefijo: `wp_bressol_` (usa prefix real de WP).
 - `bressol_opened_items`
 - `bressol_opened_item_events`
@@ -113,3 +111,11 @@ Prefijo: `wp_bressol_` (usa prefix real de WP).
 Forecasting (tablas)
 Prefijo: `wp_bressol_` (usa prefix real de WP).
 - `bressol_forecast_snapshots`
+
+Purchasing (tablas, sin PII)
+Prefijo: `wp_bressol_` (usa prefix real de WP).
+- `bressol_suppliers` (notes sin PII)
+- `bressol_purchase_orders`
+- `bressol_purchase_order_lines`
+- `bressol_receivings`
+- `bressol_receiving_lines`

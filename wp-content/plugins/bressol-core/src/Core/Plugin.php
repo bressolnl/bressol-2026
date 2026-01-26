@@ -40,5 +40,7 @@ final class Plugin
         $this->modules[] = new \Bressol\Modules\SalesAnalytics\SalesAnalyticsModule();
         $this->modules[] = new \Bressol\Modules\MarketsEvents\MarketsEventsModule();
         $this->modules[] = new \Bressol\Modules\Inventory\InventoryModule();
+        $this->modules[] = new \Bressol\Modules\CostMargin\CostMarginModule();
+        $this->modules[] = new \Bressol\Modules\Purchasing\PurchasingModule();
     }
 }

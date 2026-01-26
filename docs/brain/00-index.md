@@ -20,6 +20,9 @@ Arbol de conocimiento
 - `docs/brain/04-datos-y-taxonomias.md`
 - `docs/brain/05-tracking-y-datalayer.md`
 
+Costes, margenes y control de perdidas
+- `docs/11-cost-margin-mvp.md`
+
 4) Modulos del plugin (bressol-core)
 - `docs/brain/modules/00-modulo-base.md`
 - `docs/brain/modules/10-packs.md`
@@ -32,15 +35,9 @@ Arbol de conocimiento
 - `docs/brain/modules/17-pos.md`
 - `docs/brain/modules/18-sales-analytics.md`
 - `docs/brain/modules/19-inventory.md`
-<<<<<<< Updated upstream
 - `docs/brain/modules/19-markets-events-calendar.md`
 - `docs/brain/modules/20-seo-pdp.md`
-=======
-- `docs/brain/modules/19-markets-events-calendar.md` (legacy)
-- `docs/brain/modules/20-markets-events.md`
-- `docs/brain/modules/20-seo-pdp.md`
-- `docs/brain/modules/21-forecasting.md`
->>>>>>> Stashed changes
+- `docs/brain/modules/21-purchasing.md`
 
 5) Theme
 - `docs/brain/theme/00-bressol-theme.md`
