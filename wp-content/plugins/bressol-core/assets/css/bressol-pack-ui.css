@@ -32,7 +32,7 @@
     background: #fff;
     margin: 16px 0;
     z-index: 2;
-    max-height: min(360px, 60vh);
+    max-height: calc(100vh - 24px);
     overflow: auto;
 }
 
@@ -165,8 +165,9 @@
     scroll-margin-top: 120px;
 }
 
-.bressol-pack-step.is-hidden {
-    display: none;
+.bressol-pack-step.is-hidden,
+.bressol-pack-wizard-step--hidden {
+    display: none !important;
 }
 
 .bressol-pack-step.is-active {

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bressol\Modules\SalesAnalytics\Services;
 
+use Bressol\Modules\CostMargin\Services\CostMarginService;
 use Bressol\Modules\MarketsEvents\Repositories\EventRepository;
 
 if (!defined('ABSPATH')) {
@@ -38,6 +39,34 @@ final class MetricsExtractor
             : 0;
         $netSalesExcl = $totalExclTax - $shippingExcl;
         $profitEstimated = $netSalesExcl - $marketCost;
+        $cogsEstimated = 0;
+        $cogsMissing = 0;
+        $cogsSource = 'estimated';
+        $cogsStatus = (string) $order->get_meta('_bressol_cogs_status');
+        $cogsReal = $order->get_meta('_bressol_cogs_real_cents');
+        if ($cogsStatus === 'final' && is_numeric($cogsReal)) {
+            $cogsEstimated = (int) $cogsReal;
+            $cogsSource = 'real';
+            $cogsMissing = 0;
+        } else {
+            if ($cogsStatus !== '' && $cogsStatus !== 'final') {
+                $cogsSource = 'pending';
+            }
+            try {
+                $cogsPayload = (new CostMarginService())->estimate_order_cogs_cents((int) $order->get_id());
+                if (is_array($cogsPayload)) {
+                    $cogsEstimated = (int) ($cogsPayload['cogs_cents'] ?? 0);
+                    $cogsMissing = !empty($cogsPayload['missing_cost']) ? 1 : 0;
+                } else {
+                    $cogsEstimated = (int) $cogsPayload;
+                }
+            } catch (\Throwable $exception) {
+                $cogsEstimated = 0;
+                $cogsMissing = 1;
+                $cogsSource = $cogsSource === 'estimated' ? 'pending' : $cogsSource;
+            }
+        }
+        $profitAfterCogs = $profitEstimated - $cogsEstimated;
 
         return [
             'order_id' => (int) $order->get_id(),
@@ -64,6 +93,10 @@ final class MetricsExtractor
             'market_cost_cents' => $marketCost,
             'net_sales_excl_tax_cents' => $netSalesExcl,
             'profit_estimated_excl_tax_cents' => $profitEstimated,
+            'cogs_estimated_cents' => $cogsEstimated,
+            'profit_estimated_after_cogs_cents' => $profitAfterCogs,
+            'cogs_estimated_missing_cost' => $cogsMissing,
+            'cogs_source' => $cogsSource,
             'is_internal' => 0,
         ];
     }
@@ -125,6 +158,10 @@ final class MetricsExtractor
             'market_cost_cents' => 0,
             'net_sales_excl_tax_cents' => 0,
             'profit_estimated_excl_tax_cents' => 0,
+            'cogs_estimated_cents' => 0,
+            'profit_estimated_after_cogs_cents' => 0,
+            'cogs_estimated_missing_cost' => 0,
+            'cogs_source' => 'estimated',
             'is_internal' => 1,
         ];
     }

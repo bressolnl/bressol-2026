@@ -21,6 +21,7 @@ final class PacksModule implements ModuleInterface
 
         // Frontend: UI del pack en ficha de producto
         (new \Bressol\Modules\Packs\Frontend\PackForm())->register();
+        (new \Bressol\Modules\Packs\Frontend\ProductCardInfo())->register();
 
         // WooCommerce: validación + carrito + precio + pedido
         if (class_exists('\WooCommerce')) {

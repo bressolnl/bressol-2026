@@ -6,6 +6,7 @@ namespace Bressol\Modules\Crm;
 use Bressol\Core\ModuleInterface;
 use Bressol\Modules\Crm\Admin\AdminPages;
 use Bressol\Modules\Crm\Services\AuditLogger;
+use Bressol\Modules\Crm\Services\Capabilities;
 use Bressol\Modules\Crm\Services\CustomerService;
 use Bressol\Modules\Crm\Services\ImportCustomersService;
 use Bressol\Modules\Crm\Services\PointsService;
@@ -27,6 +28,7 @@ final class CrmModule implements ModuleInterface
     public function register(): void
     {
         Installer::maybe_upgrade();
+        (new Capabilities())->register();
 
         add_action(self::CRON_HOOK, [$this, 'runDailyExpiration']);
         add_action(self::RETENTION_CRON_HOOK, [$this, 'runRetentionAnonymization']);

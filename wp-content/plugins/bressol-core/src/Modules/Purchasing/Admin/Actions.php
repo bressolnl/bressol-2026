@@ -37,6 +37,7 @@ final class Actions
         add_action('admin_post_bressol_purchasing_change_po_status', [$this, 'handle_change_po_status']);
         add_action('admin_post_bressol_purchasing_create_receiving', [$this, 'handle_create_receiving']);
         add_action('admin_post_bressol_purchasing_planning_run', [$this, 'handle_planning_run']);
+        add_action('admin_post_bressol_purchasing_planning_create_po_from_latest', [$this, 'handle_planning_create_po_from_latest']);
         add_action('admin_post_bressol_purchasing_diagnostics_planning_run', [$this, 'handle_diagnostics_planning_run']);
         add_action('admin_post_bressol_purchasing_diagnostics_clear', [$this, 'handle_diagnostics_clear']);
     }
@@ -222,6 +223,78 @@ final class Actions
         $this->redirect_with_notice('bressol_purchasing_planning', 'planning_run_ok');
     }
 
+    public function handle_planning_create_po_from_latest(): void
+    {
+        if (!$this->capabilities->current_user_can_sensitive()) {
+            $this->redirect_with_notice('bressol_purchasing_planning', 'forbidden');
+        }
+
+        check_admin_referer('bressol_purchasing_planning_create_po');
+
+        $supplierId = isset($_POST['supplier_id']) ? absint($_POST['supplier_id']) : 0;
+        $runId = isset($_POST['run_id']) ? sanitize_text_field(wp_unslash($_POST['run_id'])) : '';
+        $includePositive = !empty($_POST['include_positive']);
+
+        $store = new \Bressol\Modules\Purchasing\Services\PlanningStore();
+        $latest = $store->get_latest();
+        if (!$latest || $runId === '' || (string) ($latest['run_id'] ?? '') !== $runId) {
+            $this->redirect_with_notice('bressol_purchasing_planning', 'planning_po_failed');
+        }
+
+        $idempotencyKey = 'bressol_purchasing_once_planning_po_' . $runId;
+        $existing = get_option($idempotencyKey, '');
+        if ($existing !== '' && is_numeric($existing)) {
+            $this->audit_planning_po_skipped($runId, (int) $existing);
+            $this->redirect_with_notice('bressol_purchasing_planning', 'planning_po_exists', [
+                'po_id' => (int) $existing,
+            ]);
+        }
+
+        $suggestions = isset($latest['suggestions']) && is_array($latest['suggestions']) ? $latest['suggestions'] : [];
+        $lines = $this->build_planning_po_lines($suggestions, $_POST, $includePositive);
+        if ($lines === []) {
+            $this->redirect_with_notice('bressol_purchasing_planning', 'planning_po_failed');
+        }
+
+        $service = new PurchaseOrderService(
+            new PurchaseOrderRepository(),
+            new SupplierRepository(),
+            new ReceivingRepository(),
+            new NullCostLedgerWritePort(),
+            new AuditLogger(),
+            PurchasingModule::build_cost_ledger_sync_service()
+        );
+
+        $header = [
+            'supplier_id' => $supplierId,
+            'po_number' => null,
+            'status' => 'draft',
+            'customs_fees_cents' => 0,
+            'tax_rate_bp' => null,
+            'currency' => 'EUR',
+            'warehouse_code' => 'ALICANTE',
+        ];
+
+        $result = $service->create_or_update_po(null, $header, $lines, true);
+        if ($result instanceof \WP_Error) {
+            $this->redirect_with_notice('bressol_purchasing_planning', 'planning_po_failed');
+        }
+
+        $poId = (int) $result;
+        update_option($idempotencyKey, (string) $poId, false);
+
+        (new AuditLogger())->log('planning_po_draft_created', [
+            'po_id' => $poId,
+            'supplier_id' => $supplierId,
+            'line_count' => count($lines),
+            'run_id' => $runId,
+        ], $poId, 'purchase_order');
+
+        $this->redirect_with_notice('bressol_purchasing_planning', 'planning_po_created', [
+            'po_id' => $poId,
+        ]);
+    }
+
     public function handle_diagnostics_planning_run(): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
@@ -328,6 +401,56 @@ final class Actions
         }
 
         return $summary;
+    }
+
+    /** @param array<int, array<string, mixed>> $suggestions
+     *  @param array<string, mixed> $input
+     *  @return array<int, array<string, mixed>>
+     */
+    private function build_planning_po_lines(array $suggestions, array $input, bool $includePositive): array
+    {
+        $selected = isset($input['line_selected']) ? (array) $input['line_selected'] : [];
+        $selected = array_map('intval', $selected);
+
+        $lineQty = isset($input['line_qty']) && is_array($input['line_qty']) ? $input['line_qty'] : [];
+        $lineKey = isset($input['line_key']) && is_array($input['line_key']) ? $input['line_key'] : [];
+        $lineSku = isset($input['line_sku']) && is_array($input['line_sku']) ? $input['line_sku'] : [];
+
+        $lines = [];
+        foreach ($suggestions as $index => $suggestion) {
+            if (!in_array((int) $index, $selected, true)) {
+                continue;
+            }
+
+            $qtyRaw = isset($lineQty[$index]) ? wp_unslash($lineQty[$index]) : '';
+            $qty = is_numeric($qtyRaw) ? (int) $qtyRaw : 0;
+            if ($includePositive && $qty <= 0) {
+                continue;
+            }
+
+            $key = isset($lineKey[$index]) ? sanitize_text_field(wp_unslash($lineKey[$index])) : '';
+            $sku = isset($lineSku[$index]) ? sanitize_text_field(wp_unslash($lineSku[$index])) : '';
+            if ($sku === '' && $key !== '' && strpos($key, 'sku:') === 0) {
+                $sku = substr($key, strlen('sku:'));
+            }
+
+            $lines[] = [
+                'sku' => $sku,
+                'qty' => $qty,
+                'unit_cost_excl_tax_cents' => 0,
+            ];
+        }
+
+        return $lines;
+    }
+
+    private function audit_planning_po_skipped(string $runId, int $existingPoId): void
+    {
+        (new AuditLogger())->log('planning_po_draft_skipped_already_created', [
+            'po_id' => $existingPoId,
+            'existing_po_id' => $existingPoId,
+            'run_id' => $runId,
+        ], $existingPoId, 'purchase_order');
     }
 
     private function supplier_form_args(int $supplierId): array

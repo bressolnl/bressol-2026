@@ -5,6 +5,7 @@ namespace Bressol\Modules\MarketsEvents;
 
 use Bressol\Core\ModuleInterface;
 use Bressol\Modules\MarketsEvents\Admin\AdminModule;
+use Bressol\Modules\MarketsEvents\Frontend\UpcomingEventsShortcode;
 use Bressol\Modules\MarketsEvents\Integrations\WooCommerceHooks;
 use Bressol\Modules\MarketsEvents\Services\Capabilities;
 use Bressol\Modules\MarketsEvents\Repositories\EventRepository;
@@ -22,6 +23,8 @@ final class MarketsEventsModule implements ModuleInterface
     {
         add_action('admin_init', [Installer::class, 'maybe_upgrade']);
         add_action('admin_init', [Capabilities::class, 'ensure_caps_registered']);
+
+        (new UpcomingEventsShortcode())->register();
 
         if (defined('WP_CLI') && WP_CLI) {
             Installer::maybe_upgrade();

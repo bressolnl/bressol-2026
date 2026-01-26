@@ -68,6 +68,8 @@ final class AuditLogger
             'suggestion_count',
             'inputs_available',
             'mode',
+            'run_id',
+            'existing_po_id',
         ];
 
         $payload = [
@@ -79,7 +81,7 @@ final class AuditLogger
                 continue;
             }
             $value = $context[$key];
-            if (in_array($key, ['supplier_id', 'po_id', 'receiving_id', 'po_line_id', 'tax_rate_bp', 'customs_fees_cents', 'line_count', 'qty', 'qty_total', 'lines_excl_tax_cents', 'total_excl_tax_cents', 'total_qty', 'total_lines', 'totals_cents', 'window_weeks', 'reminder_weeks_before', 'suggestion_count'], true)) {
+            if (in_array($key, ['supplier_id', 'po_id', 'receiving_id', 'po_line_id', 'tax_rate_bp', 'customs_fees_cents', 'line_count', 'qty', 'qty_total', 'lines_excl_tax_cents', 'total_excl_tax_cents', 'total_qty', 'total_lines', 'totals_cents', 'window_weeks', 'reminder_weeks_before', 'suggestion_count', 'existing_po_id'], true)) {
                 $payload[$key] = $value === null ? null : (int) $value;
                 continue;
             }

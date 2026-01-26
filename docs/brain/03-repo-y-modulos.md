@@ -15,10 +15,17 @@ Mapa de modulos (plugin)
 - `Recommendations/` reglas y bloques de recomendaciones PDP/Cart
 - `PostAddToCartModal/` modal de upsell despues de add-to-cart
 - `Taxonomies/` taxonomia `bressol_moment`
+- `Seo/` metacampos SEO y render PDP
 - `Esp/` email service provider interno
 - `Crm/` CRM interno con puntos y consentimiento
 - `Pos/` punto de venta interno (admin)
+- `SalesAnalytics/` reporting y exports (web/pos/eventos)
+- `MarketsEvents/` agenda de eventos/mercados (POS + shortcode)
+- `Inventory/` sellable stock para simples/packs
+- `Forecasting/` forecasting y snapshots de compra
 
 Mapa de frontend (tema)
 - `functions.php` setup del tema (soportes basicos)
 - `header.php`, `footer.php`, `index.php` esqueletos basicos
+- `taxonomy-product_cat.php` PLP con intro/longform/FAQ por categoria
+- `taxonomy-bressol_moment.php` pagina de momentos con intro/longform/FAQ

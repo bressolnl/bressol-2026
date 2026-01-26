@@ -5,7 +5,10 @@ namespace Bressol\Modules\Inventory;
 
 use Bressol\Core\ModuleInterface;
 use Bressol\Modules\Inventory\Admin\AdminPages;
+use Bressol\Modules\Inventory\Installer;
+use Bressol\Modules\Inventory\Cli\SellableCommand;
 use Bressol\Modules\Inventory\Cli\SelfTestCommand;
+use Bressol\Modules\Inventory\Cli\TransferDemoCommand;
 use Bressol\Modules\Inventory\Repositories\PackDefinitionRepository;
 use Bressol\Modules\Inventory\Services\AuditLogger;
 use Bressol\Modules\Inventory\Services\CacheService;
@@ -30,6 +33,12 @@ final class InventoryModule implements ModuleInterface
         $this->auditLogger = new AuditLogger();
         $this->sellableService = SellableService::build_default($this->cacheService, $this->auditLogger);
 
+        add_action('admin_init', [Installer::class, 'maybe_upgrade']);
+
+        if (defined('WP_CLI') && WP_CLI) {
+            Installer::maybe_upgrade();
+        }
+
         if (is_admin()) {
             $adminPages = new AdminPages($this->capabilities, $this->sellableService);
             add_action('admin_menu', [$adminPages, 'registerMenus']);
@@ -46,6 +55,8 @@ final class InventoryModule implements ModuleInterface
 
         if (defined('WP_CLI') && WP_CLI && class_exists('\\WP_CLI')) {
             \WP_CLI::add_command('bressol inventory selftest', new SelfTestCommand());
+            \WP_CLI::add_command('bressol inventory sellable', new SellableCommand());
+            \WP_CLI::add_command('bressol transfer demo', new TransferDemoCommand());
         }
     }
 

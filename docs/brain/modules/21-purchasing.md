@@ -73,6 +73,11 @@ Estados: draft, sent, confirmed, receiving, closed, cancelled (sin receivings ni
 - Sin PII.
 - Ruta: WP Admin → Bressol → Purchasing → Planning (page=bressol_purchasing_planning).
 
+## v0.3 Create draft PO from suggestions
+- Crea PO en draft desde el ultimo planning run.
+- Unit cost por linea se inicializa en 0; completar manualmente antes de enviar/cerrar.
+- Idempotencia por run_id: `bressol_purchasing_once_planning_po_{run_id}`.
+
 ## Testing without WP-CLI (Diagnostics page)
 - Pantalla admin: Bressol > Purchasing > Diagnostics.
 - Health checks: tablas, caps, flags, counts, latest planning run.

@@ -2,7 +2,7 @@
 
 Separacion de responsabilidades
 - `bressol-theme`: UI/UX, plantillas, SEO on-page y rendimiento.
-- `bressol-core` (plugin): logica de negocio, packs, guided shopping, recomendaciones, tracking, CRM, ESP, POS.
+- `bressol-core` (plugin): logica de negocio, packs, guided shopping, recomendaciones, tracking, CRM, ESP, POS, analytics, inventario, eventos, forecasting y SEO.
 
 Bootstrap del plugin
 - Archivo principal: `wp-content/plugins/bressol-core/bressol-core.php`.
@@ -12,6 +12,8 @@ Bootstrap del plugin
 - Activacion:
   - Instala tablas ESP y CRM.
   - Programa cron de ESP, CRM y POS.
+- Instaladores (admin_init / WP-CLI):
+  - POS, MarketsEvents, Forecasting (tablas propias).
 - Desactivacion:
   - Limpia cron de ESP, CRM y POS.
 
@@ -27,6 +29,11 @@ Modulos actuales (orden de carga)
 - Recommendations
 - PostAddToCartModal
 - Taxonomies
+- Seo
 - ESP
 - CRM
 - POS
+- SalesAnalytics
+- MarketsEvents
+- Inventory
+- Forecasting

@@ -24,7 +24,8 @@ final class ForecastingAdapter implements ForecastingPort
             return [];
         }
 
-        $service = new self::SERVICE_CLASS();
+        $class = self::SERVICE_CLASS;
+        $service = new $class();
         if (!method_exists($service, 'get_forecast')) {
             return [];
         }

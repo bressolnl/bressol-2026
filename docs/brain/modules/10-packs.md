@@ -17,6 +17,7 @@ Componentes y archivos
 Contrato de datos
 - `_bressol_pack_definition` JSON con `slots[]`.
 - Cada slot: `key`, `label`, `required`, `min`, `max`, `options[]`.
+- Opcional: `group_key` (string, 2..32, [a-z0-9_-]) para agrupar slots de la misma familia.
 - Cada option: `product_id`, `label`, `surcharge`.
 
 Convencion de preseleccion (default)
@@ -34,12 +35,43 @@ Ejemplo minimo (slot simple con default)
     {
       "key": "oil",
       "label": "Elige 1 aceite",
+      "group_key": "oil",
       "required": true,
       "min": 1,
       "max": 1,
       "options": [
         { "product_id": 68, "label": "Aceite (ID 68)", "surcharge": 0, "default": true },
         { "product_id": 73, "label": "Aceite premium (ID 73)", "surcharge": 2 }
+      ]
+    }
+  ]
+}
+
+Ejemplo agrupado (2 slots misma familia)
+{
+  "slots": [
+    {
+      "key": "tapenade_1",
+      "label": "Tapenade 1",
+      "group_key": "tapenade",
+      "required": true,
+      "min": 1,
+      "max": 1,
+      "options": [
+        { "product_id": 101, "label": "Tapenade A", "surcharge": 0 },
+        { "product_id": 102, "label": "Tapenade B", "surcharge": 0 }
+      ]
+    },
+    {
+      "key": "tapenade_2",
+      "label": "Tapenade 2",
+      "group_key": "tapenade",
+      "required": true,
+      "min": 1,
+      "max": 1,
+      "options": [
+        { "product_id": 101, "label": "Tapenade A", "surcharge": 0 },
+        { "product_id": 102, "label": "Tapenade B", "surcharge": 0 }
       ]
     }
   ]

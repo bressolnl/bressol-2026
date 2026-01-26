@@ -17,6 +17,15 @@ add_action('after_setup_theme', function () {
 });
 
 add_action('wp_enqueue_scripts', function () {
+    $fonts_path = get_stylesheet_directory() . '/assets/fonts/fonts.css';
+    if (is_readable($fonts_path)) {
+        wp_enqueue_style(
+            'bressol-fonts',
+            get_stylesheet_directory_uri() . '/assets/fonts/fonts.css',
+            [],
+            (string) filemtime($fonts_path)
+        );
+    }
     $style_path = get_stylesheet_directory() . '/style.css';
     $style_version = is_readable($style_path) ? (string) filemtime($style_path) : '0.1.0';
     wp_enqueue_style('bressol-theme', get_stylesheet_uri(), [], $style_version);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bressol\Modules\Crm\Admin;
 
 use Bressol\Modules\Crm\Services\AuditLogger;
+use Bressol\Modules\Crm\Services\Capabilities;
 use Bressol\Modules\Crm\Services\CustomerService;
 use Bressol\Modules\Crm\Services\ImportCustomersService;
 use Bressol\Modules\Crm\Services\PointsService;
@@ -905,7 +906,7 @@ final class AdminPages
 
     private function get_capability(): string
     {
-        return class_exists('WooCommerce') ? 'manage_woocommerce' : 'manage_options';
+        return Capabilities::CAP;
     }
 
     private function current_user_can(): bool

@@ -30,5 +30,8 @@ Admin menu
 - Campanas, Plantillas, Segmentos, Emails manuales, Metricas,
   Consentimientos, Exportaciones, Cola, SMTP, Auditoria.
 
+Caps
+- `bressol_manage_esp` (acceso permitido también con `manage_options` o `manage_woocommerce`).
+
 Documento base detallado
 - `docs/esp.md`

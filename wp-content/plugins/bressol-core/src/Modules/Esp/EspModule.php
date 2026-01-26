@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bressol\Modules\Esp;
 
 use Bressol\Core\ModuleInterface;
+use Bressol\Modules\Esp\Services\Capabilities;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -19,6 +20,7 @@ final class EspModule implements ModuleInterface
 
     public function register(): void
     {
+        (new Capabilities())->register();
         add_action('init', [$this, 'handleOpenTracking']);
         add_action('init', [$this, 'handleClickTracking']);
         add_action('init', [$this, 'handleUnsubscribe']);
@@ -1101,7 +1103,7 @@ final class EspModule implements ModuleInterface
 
     public function registerAdminMenu(): void
     {
-        $capability = 'manage_options';
+        $capability = Capabilities::CAP;
 
         add_submenu_page(
             'bressol',

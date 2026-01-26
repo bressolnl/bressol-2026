@@ -226,6 +226,7 @@ final class AdminPages
 
         if ($latest) {
             $this->render_latest_run($latest);
+            $this->render_planning_create_po_block($latest);
         } else {
             echo '<p>No planning runs saved yet.</p>';
         }
@@ -302,6 +303,14 @@ final class AdminPages
         } elseif ($notice === 'planning_run_failed') {
             $message = 'No se pudo ejecutar planning.';
             $type = 'notice-error';
+        } elseif ($notice === 'planning_po_created') {
+            $message = 'PO draft creado desde planning.';
+        } elseif ($notice === 'planning_po_exists') {
+            $message = 'Ya existe un PO para este planning.';
+            $type = 'notice-warning';
+        } elseif ($notice === 'planning_po_failed') {
+            $message = 'No se pudo crear el PO desde planning.';
+            $type = 'notice-error';
         } elseif ($notice === 'diagnostics_planning_ok') {
             $message = 'Diagnostics: planning ejecutado.';
         } elseif ($notice === 'diagnostics_planning_failed') {
@@ -313,6 +322,18 @@ final class AdminPages
 
         echo '<p class="notice ' . esc_attr($type) . '" style="padding:8px 12px;">';
         echo esc_html($message);
+        if (in_array($notice, ['planning_po_created', 'planning_po_exists'], true) && isset($_GET['po_id'])) {
+            $poId = absint($_GET['po_id']);
+            if ($poId > 0) {
+                $editUrl = add_query_arg([
+                    'page' => self::PAGE_POS,
+                    'view' => 'edit',
+                    'po_id' => $poId,
+                ], admin_url('admin.php'));
+                echo ' ';
+                echo '<a href="' . esc_url($editUrl) . '">Ver PO</a>';
+            }
+        }
         echo '</p>';
     }
 
@@ -563,6 +584,11 @@ final class AdminPages
         if ($isLocked) {
             echo '<p class="notice notice-warning" style="padding:8px 12px;">';
             echo 'PO locked: has receivings. Lines cannot be edited.';
+            echo '</p>';
+        }
+        if ($this->has_zero_unit_cost_lines($lines)) {
+            echo '<p class="notice notice-warning" style="padding:8px 12px;">';
+            echo 'Costs are 0; fill unit costs before sending/closing.';
             echo '</p>';
         }
 
@@ -1050,6 +1076,77 @@ final class AdminPages
         }
 
         echo '</tbody></table>';
+    }
+
+    /** @param array<string, mixed> $latest */
+    private function render_planning_create_po_block(array $latest): void
+    {
+        $suggestions = isset($latest['suggestions']) && is_array($latest['suggestions']) ? $latest['suggestions'] : [];
+        if ($suggestions === []) {
+            return;
+        }
+
+        $runId = (string) ($latest['run_id'] ?? '');
+        $suppliers = $this->get_suppliers_index();
+
+        echo '<h2>Create draft PO from latest run</h2>';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        wp_nonce_field('bressol_purchasing_planning_create_po');
+        echo '<input type="hidden" name="action" value="bressol_purchasing_planning_create_po_from_latest" />';
+        echo '<input type="hidden" name="run_id" value="' . esc_attr($runId) . '" />';
+
+        echo '<table class="form-table">';
+        echo '<tr><th>Supplier</th><td><select name="supplier_id" required>';
+        echo '<option value="0">Selecciona proveedor</option>';
+        foreach ($suppliers as $supplier) {
+            $id = (int) ($supplier['id'] ?? 0);
+            $label = $this->format_supplier_label($supplier);
+            echo '<option value="' . esc_attr((string) $id) . '">' . esc_html($label) . '</option>';
+        }
+        echo '</select></td></tr>';
+        echo '<tr><th>Include only suggested_buy_qty &gt; 0</th><td>';
+        echo '<label><input type="checkbox" name="include_positive" value="1" checked /> Sí</label>';
+        echo '</td></tr>';
+        echo '</table>';
+
+        echo '<table class="widefat striped" style="max-width:1200px;">';
+        echo '<thead><tr>';
+        echo '<th>Use</th><th>Key</th><th>Qty</th><th>Suggested</th><th>Rationale</th>';
+        echo '</tr></thead><tbody>';
+
+        foreach ($suggestions as $index => $suggestion) {
+            $key = (string) ($suggestion['key'] ?? '');
+            $sku = isset($suggestion['sku']) ? (string) $suggestion['sku'] : '';
+            $suggested = (int) ($suggestion['suggested_buy_qty'] ?? 0);
+            $rationale = (string) ($suggestion['rationale'] ?? '');
+
+            echo '<tr>';
+            echo '<td><input type="checkbox" name="line_selected[]" value="' . esc_attr((string) $index) . '" ' . checked($suggested > 0, true, false) . ' /></td>';
+            echo '<td>' . esc_html($key) . '</td>';
+            echo '<td><input type="number" min="0" name="line_qty[' . esc_attr((string) $index) . ']" value="' . esc_attr((string) $suggested) . '" /></td>';
+            echo '<td>' . esc_html((string) $suggested) . '</td>';
+            echo '<td>' . esc_html($rationale) . '</td>';
+            echo '</tr>';
+
+            echo '<input type="hidden" name="line_key[' . esc_attr((string) $index) . ']" value="' . esc_attr($key) . '" />';
+            echo '<input type="hidden" name="line_sku[' . esc_attr((string) $index) . ']" value="' . esc_attr($sku) . '" />';
+        }
+
+        echo '</tbody></table>';
+        echo '<p class="submit"><button type="submit" class="button button-primary">Create draft PO</button></p>';
+        echo '</form>';
+    }
+
+    /** @param array<int, array<string, mixed>> $lines */
+    private function has_zero_unit_cost_lines(array $lines): bool
+    {
+        foreach ($lines as $line) {
+            if (isset($line['unit_cost_excl_tax_cents']) && (int) $line['unit_cost_excl_tax_cents'] === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param array<string, mixed> $inputs */

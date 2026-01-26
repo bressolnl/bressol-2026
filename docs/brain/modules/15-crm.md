@@ -32,5 +32,8 @@ CLI
 - `wp bressol crm import-customers`
 - `wp bressol crm selftest`
 
+Caps
+- `bressol_manage_crm` (acceso permitido también con `manage_options` o `manage_woocommerce`).
+
 Tablas
 - Ver `docs/brain/04-datos-y-taxonomias.md`.

@@ -8,6 +8,8 @@ use Bressol\Modules\Crm\Services\AuditLogger;
 use Bressol\Modules\Crm\Services\CustomerService;
 use Bressol\Modules\Crm\Services\PointsService;
 use Bressol\Modules\Crm\Services\Settings as CrmSettings;
+use Bressol\Modules\CostMargin\Services\MarginRulesService;
+use Bressol\Modules\CostMargin\Services\MarginAuditService;
 use Bressol\Modules\MarketsEvents\Services\MarketsEventsPosMarketProvider;
 use Bressol\Modules\MarketsEvents\Services\PosEventContextService;
 use Bressol\Modules\Inventory\Services\AuditLogger as InventoryAuditLogger;
@@ -237,6 +239,8 @@ final class PosModule implements ModuleInterface
         $sellableService = SellableService::build_default(new InventoryCacheService(), new InventoryAuditLogger());
         $validatedItems = [];
         $itemsTotalCents = 0;
+        $usedPriceFallback = false;
+        $rulesItems = [];
         // Expected POS items payload:
         // - product_id (int)
         // - qty (int)
@@ -268,10 +272,40 @@ final class PosModule implements ModuleInterface
                 'product' => $product,
                 'qty' => $qty,
             ];
+            $priceExclCents = null;
+            if (isset($item['price_excl_tax_cents']) && is_numeric($item['price_excl_tax_cents'])) {
+                $priceExclCents = (int) $item['price_excl_tax_cents'];
+            } elseif (function_exists('wc_get_price_excluding_tax')) {
+                $priceExcl = wc_get_price_excluding_tax($product, ['qty' => 1]);
+                $priceExclCents = (int) round(((float) $priceExcl) * 100);
+                $usedPriceFallback = true;
+            }
+            $rulesItems[] = [
+                'product_id' => $productId,
+                'qty' => $qty,
+                'price_excl_tax_cents' => $priceExclCents,
+                'pack_selection' => $selection,
+            ];
         }
 
         if ($validatedItems === []) {
             $this->send_pos_error('pos_invalid_items', 'Productos inválidos.', 422);
+        }
+
+        $isClearance = isset($_POST['is_clearance']) && wp_unslash($_POST['is_clearance']) === 'yes';
+        $rulesService = new MarginRulesService();
+        $rulesResult = $rulesService->evaluate_cart($rulesItems, [
+            'channel' => 'pos',
+            'market_cost_cents' => 0,
+            'is_clearance' => $isClearance,
+        ]);
+        $marginPayload = [
+            'margin_status' => $rulesResult['status'],
+            'margin_violations' => $rulesResult['violations'],
+            'margin_computed' => $rulesResult['computed'],
+        ];
+        if ($rulesResult['status'] === 'block') {
+            $this->send_pos_error('pos_margin_blocked', 'Margen insuficiente.', 422, $marginPayload);
         }
 
         $customerService = new CustomerService($auditLogger);
@@ -370,6 +404,19 @@ final class PosModule implements ModuleInterface
         $order->set_status('completed');
         $order->save();
 
+        $priceSource = $usedPriceFallback ? 'woo_fallback' : 'explicit';
+        try {
+            (new MarginAuditService())->persist_from_result($order, $rulesResult, [
+                'channel' => 'pos',
+                'market_cost_cents' => 0,
+                'price_source' => $priceSource,
+            ]);
+        } catch (\Throwable $exception) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('[bressol_margin] persist_failed order=' . (int) $order->get_id());
+            }
+        }
+
         if ($auditLogger instanceof AuditLogger) {
             $auditLogger->log('pos_order_created', 'order', (int) $order->get_id(), get_current_user_id(), [
                 'market_id' => $marketId,
@@ -394,9 +441,10 @@ final class PosModule implements ModuleInterface
             }
         }
 
-        wp_send_json_success([
+        $response = [
             'order_id' => $order->get_id(),
-        ]);
+        ] + $marginPayload;
+        wp_send_json_success($response);
     }
 
     public function handleOpenSamplingItemAjax(): void

@@ -62,6 +62,8 @@ final class PackMetaBox
     {
         $value = (string) get_post_meta($post->ID, self::META_KEY, true);
 
+        settings_errors('bressol_pack_definition');
+
         // Nonce para el guardado clásico (si aplica)
         wp_nonce_field('bressol_pack_definition_save', 'bressol_pack_definition_nonce');
 
@@ -114,10 +116,27 @@ final class PackMetaBox
 
         $decoded = json_decode($raw, true);
         if (!is_array($decoded)) {
+            add_settings_error('bressol_pack_definition', 'pack_json_invalid', 'JSON inválido: debe ser un objeto/array.', 'error');
             return;
         }
 
-        update_post_meta($postId, self::META_KEY, wp_json_encode($decoded));
+        $warnings = [];
+        $errors = [];
+        $normalized = $this->sanitizeDefinition($decoded, $warnings, $errors);
+        if ($errors !== []) {
+            foreach ($errors as $message) {
+                add_settings_error('bressol_pack_definition', 'pack_json_error', $message, 'error');
+            }
+            return;
+        }
+
+        if ($warnings !== []) {
+            foreach ($warnings as $message) {
+                add_settings_error('bressol_pack_definition', 'pack_json_warning', $message, 'warning');
+            }
+        }
+
+        update_post_meta($postId, self::META_KEY, wp_json_encode($normalized));
     }
 
     public function ajaxSavePackDefinition(): void
@@ -154,8 +173,19 @@ final class PackMetaBox
             wp_send_json_error(['message' => 'JSON inválido: debe ser un objeto/array.'], 400);
         }
         
-        update_post_meta($postId, self::META_KEY, wp_json_encode($decoded));
-        wp_send_json_success(['message' => 'Guardado.']);
+        $warnings = [];
+        $errors = [];
+        $normalized = $this->sanitizeDefinition($decoded, $warnings, $errors);
+        if ($errors !== []) {
+            wp_send_json_error(['message' => implode(' ', $errors)], 400);
+        }
+
+        update_post_meta($postId, self::META_KEY, wp_json_encode($normalized));
+        $message = 'Guardado.';
+        if ($warnings !== []) {
+            $message .= ' ' . implode(' ', $warnings);
+        }
+        wp_send_json_success(['message' => $message]);
     }
 
     private function exampleJson(): string
@@ -165,6 +195,7 @@ final class PackMetaBox
     {
       "key": "oil",
       "label": "Elige 1 aceite",
+      "group_key": "oil",
       "required": true,
       "min": 1,
       "max": 1,
@@ -175,5 +206,45 @@ final class PackMetaBox
     }
   ]
 }';
+    }
+
+    /** @param array<string, mixed> $decoded
+     *  @param array<int, string> $warnings
+     *  @param array<int, string> $errors
+     *  @return array<string, mixed>
+     */
+    private function sanitizeDefinition(array $decoded, array &$warnings, array &$errors): array
+    {
+        if (!isset($decoded['slots']) || !is_array($decoded['slots'])) {
+            $errors[] = 'JSON inválido: falta "slots" o no es un array.';
+            return $decoded;
+        }
+
+        foreach ($decoded['slots'] as $index => $slot) {
+            if (!is_array($slot)) {
+                $warnings[] = 'Slot inválido en posición ' . $index . '.';
+                continue;
+            }
+
+            if (!isset($slot['group_key']) || $slot['group_key'] === null || $slot['group_key'] === '') {
+                continue;
+            }
+
+            $raw = is_string($slot['group_key']) ? $slot['group_key'] : (string) $slot['group_key'];
+            $sanitized = sanitize_key($raw);
+            $length = strlen($sanitized);
+            if ($sanitized === '' || $length < 2 || $length > 32) {
+                unset($decoded['slots'][$index]['group_key']);
+                $warnings[] = 'group_key inválido en slot "' . ($slot['key'] ?? $index) . '". Se ha eliminado.';
+                continue;
+            }
+
+            if ($sanitized !== $raw) {
+                $decoded['slots'][$index]['group_key'] = $sanitized;
+                $warnings[] = 'group_key sanitizado en slot "' . ($slot['key'] ?? $index) . '".';
+            }
+        }
+
+        return $decoded;
     }
 }

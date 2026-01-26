@@ -12,6 +12,21 @@
         });
     };
 
+    const isDebugEnabled = () => {
+        try {
+            return localStorage.getItem('bressol_debug') === '1';
+        } catch (e) {
+            return false;
+        }
+    };
+
+    const debugLog = (label, payload) => {
+        if (!isDebugEnabled()) {
+            return;
+        }
+        console.debug('[bressol-pack]', label, payload);
+    };
+
     const updateGroupCount = (group) => {
         const max = parseInt(group.dataset.groupMax || '1', 10);
         const countEl = group.querySelector('.bressol-pack-slot__count');
@@ -83,7 +98,15 @@
         }, 1200);
     };
 
-    const isGroupVisible = (group) => !group.classList.contains('is-hidden') && group.dataset.wizardHidden !== '1';
+    const isGroupVisible = (group) => {
+        if (group.classList.contains('bressol-pack-wizard-step--hidden')) {
+            return false;
+        }
+        if (group.getAttribute('aria-hidden') === 'true') {
+            return false;
+        }
+        return true;
+    };
 
     const updateValidation = (form) => {
         const submit = form.querySelector('button[type="submit"], input[type="submit"]');
@@ -160,6 +183,63 @@
         localStorage.setItem(key, JSON.stringify(state));
     };
 
+    const getUpgradeKey = (form) => form.dataset.upgradeGroupKey || 'drinks';
+
+    const getGroupDebugState = (form) => {
+        const groups = form.querySelectorAll('.bressol-pack-group');
+        return Array.from(groups).map((group) => ({
+            key: group.dataset.groupKey || '',
+            hidden: !isGroupVisible(group),
+            min: parseInt(group.dataset.groupMin || '0', 10),
+            max: parseInt(group.dataset.groupMax || '0', 10),
+            required: group.dataset.groupRequired === '1',
+        }));
+    };
+
+    const updateDebugState = (form, source) => {
+        if (!isDebugEnabled()) {
+            return;
+        }
+        const state = readWizardState(form) || {};
+        const packId = form.dataset.packId || '';
+        const groups = getGroupDebugState(form);
+        const payload = {
+            source,
+            packId,
+            wizardStep: form.dataset.wizardStep || '',
+            pendingUpgrade: Boolean(state.pendingUpgrade),
+            targetPackId: state.targetPackId || '',
+            upgradeKey: getUpgradeKey(form),
+            visibleGroups: groups.filter((g) => !g.hidden).map((g) => g.key),
+            groups,
+        };
+        window.__BRESSOL_PACK_DEBUG__ = window.__BRESSOL_PACK_DEBUG__ || {};
+        window.__BRESSOL_PACK_DEBUG__[packId || 'default'] = payload;
+        debugLog('state', payload);
+    };
+
+    const findUpgradeTrigger = (form) => {
+        if (form.querySelector('.bressol-pick-pack')) {
+            return true;
+        }
+        const packId = form.dataset.packId || '';
+        if (packId) {
+            return Boolean(document.querySelector(`.bressol-pick-pack[data-pack-id="${packId}"]`));
+        }
+        return false;
+    };
+
+    const isUpgradeEnabled = (form) => {
+        const state = readWizardState(form);
+        if (form.dataset.upgradeGroupKey) {
+            return true;
+        }
+        if (state && (state.pendingUpgrade || state.step === 2)) {
+            return true;
+        }
+        return findUpgradeTrigger(form);
+    };
+
     const persistLegacySnapshot = (form) => {
         const inputs = Array.from(form.querySelectorAll('input[name^="bressol_pack["]'));
         const snapshot = inputs.map((input) => ({
@@ -193,50 +273,64 @@
         });
     };
 
-    const toggleGroupsByPredicate = (form, predicate) => {
+    const toggleGroups = (form, predicate) => {
         const groups = form.querySelectorAll('.bressol-pack-group');
         groups.forEach((group) => {
             const visible = predicate(group);
-            group.classList.add('bressol-pack-step');
-            group.classList.toggle('is-hidden', !visible);
-            group.dataset.wizardHidden = visible ? '0' : '1';
+            group.classList.toggle('bressol-pack-wizard-step--hidden', !visible);
             group.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        });
+        updateDebugState(form, 'toggleGroups');
+    };
+
+    const setDrinksConstraints = (group, min = 4, max = 4) => {
+        if (!group) {
+            return;
+        }
+        group.dataset.groupMin = String(min);
+        group.dataset.groupMax = String(max);
+        group.dataset.groupRequired = '1';
+        const qtyInputs = group.querySelectorAll('.bressol-pack-qty-input');
+        qtyInputs.forEach((input) => {
+            input.max = String(max);
         });
     };
 
     const goToStep = (form, step) => {
-        const upgradeKey = form.dataset.upgradeGroupKey || 'drinks';
+        const upgradeKey = getUpgradeKey(form);
+        const upgradeEnabled = isUpgradeEnabled(form);
         form.dataset.wizardStep = String(step);
-        if (step === 2) {
+        if (!upgradeEnabled) {
+            toggleGroups(form, () => true);
+        } else if (step === 2) {
             const upgradeGroup = form.querySelector(`.bressol-pack-group[data-group-key="${upgradeKey}"]`);
-            if (upgradeGroup) {
-                const currentMin = parseInt(upgradeGroup.dataset.groupMin || '0', 10);
-                const currentMax = parseInt(upgradeGroup.dataset.groupMax || '0', 10);
-                if (currentMin < 4) {
-                    upgradeGroup.dataset.groupMin = '4';
-                }
-                if (currentMax < 4) {
-                    upgradeGroup.dataset.groupMax = '4';
-                }
-                upgradeGroup.dataset.groupRequired = '1';
-            }
-            toggleGroupsByPredicate(form, (group) => (group.dataset.groupKey || '') === upgradeKey);
+            setDrinksConstraints(upgradeGroup, 4, 4);
+            toggleGroups(form, (group) => (group.dataset.groupKey || '') === upgradeKey);
         } else {
-            toggleGroupsByPredicate(form, (group) => (group.dataset.groupKey || '') !== upgradeKey);
+            toggleGroups(form, (group) => (group.dataset.groupKey || '') !== upgradeKey);
         }
         const state = readWizardState(form) || {};
         writeWizardState(form, { ...state, step });
         updateValidation(form);
         scheduleSummary(form);
+
+        const back = form.querySelector('.bressol-pack-wizard__back');
+        if (back) {
+            back.style.display = step === 2 ? '' : 'none';
+        }
+        updateDebugState(form, 'goToStep');
     };
 
     const initWizard = (form) => {
-        const upgradeKey = form.dataset.upgradeGroupKey || 'drinks';
+        const upgradeKey = getUpgradeKey(form);
         const hasUpgradeGroup = Boolean(form.querySelector(`.bressol-pack-group[data-group-key="${upgradeKey}"]`));
         if (!hasUpgradeGroup) {
             return;
         }
-        form.dataset.wizardEnabled = '1';
+        const upgradeEnabled = isUpgradeEnabled(form);
+        if (upgradeEnabled) {
+            form.dataset.wizardEnabled = '1';
+        }
 
         const params = new URLSearchParams(window.location.search);
         const forceStep2 = params.get('wizard_step') === '2' || params.get('bressol_upgrade') === '1';
@@ -245,7 +339,7 @@
         if (state && state.snapshot) {
             restoreLegacySnapshot(form);
         }
-        if (state && state.step === 2 || forceStep2) {
+        if ((state && state.step === 2) || forceStep2) {
             goToStep(form, 2);
         } else {
             goToStep(form, 1);
@@ -262,6 +356,7 @@
             });
             summaryBody.insertBefore(back, summaryBody.firstChild);
         }
+        updateDebugState(form, 'initWizard');
     };
 
     const formatPrice = (value) => {
@@ -778,6 +873,9 @@
                 event.preventDefault();
                 const groups = form.querySelectorAll('.bressol-pack-group');
                 for (const group of groups) {
+                    if (!isGroupVisible(group)) {
+                        continue;
+                    }
                     const message = group.querySelector('.bressol-pack-group__message');
                     if (message && message.textContent) {
                         group.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -793,24 +891,69 @@
         });
     });
 
-    const handleUpgradeConfirm = () => {
-        forms.forEach((form) => {
-            const upgradeKey = form.dataset.upgradeGroupKey || 'drinks';
-            if (!form.querySelector(`.bressol-pack-group[data-group-key="${upgradeKey}"]`)) {
-                return;
-            }
-            persistLegacySnapshot(form);
-            goToStep(form, 2);
-        });
+    const resolveFormForTrigger = (trigger) => {
+        if (!trigger) {
+            return null;
+        }
+        const closestForm = trigger.closest('.bressol-pack-form');
+        if (closestForm) {
+            return closestForm;
+        }
+        const packId = trigger.getAttribute('data-pack-id') || '';
+        if (packId) {
+            return document.querySelector(`.bressol-pack-form[data-pack-id="${packId}"]`);
+        }
+        return forms.length ? forms[0] : null;
+    };
+
+    const handleUpgradeConfirm = (form) => {
+        if (!form) {
+            return;
+        }
+        const state = readWizardState(form) || {};
+        if (!state.pendingUpgrade) {
+            return;
+        }
+        const upgradeKey = getUpgradeKey(form);
+        if (!form.querySelector(`.bressol-pack-group[data-group-key="${upgradeKey}"]`)) {
+            return;
+        }
+        persistLegacySnapshot(form);
+        writeWizardState(form, { ...state, pendingUpgrade: false, step: 2 });
+        form.dataset.wizardEnabled = '1';
+        goToStep(form, 2);
+        updateDebugState(form, 'confirmUpgrade');
     };
 
     document.addEventListener('click', (event) => {
-        const trigger = event.target.closest('#bressol-confirm-upgrade,[data-bressol-upgrade-confirm]');
-        if (!trigger) {
+        const confirm = event.target.closest('#bressol-confirm-upgrade,[data-bressol-upgrade-confirm]');
+        if (confirm) {
+            const form = resolveFormForTrigger(confirm);
+            handleUpgradeConfirm(form);
             return;
         }
-        handleUpgradeConfirm();
+        const pickPack = event.target.closest('.bressol-pick-pack');
+        if (pickPack) {
+            const form = resolveFormForTrigger(pickPack);
+            if (!form) {
+                return;
+            }
+            const state = readWizardState(form) || {};
+            writeWizardState(form, {
+                ...state,
+                pendingUpgrade: true,
+                targetPackId: pickPack.getAttribute('data-pack-id') || '',
+            });
+            form.dataset.wizardEnabled = '1';
+            updateDebugState(form, 'pickUpgrade');
+        }
     });
 
-    document.addEventListener('bressol-pack-upgrade-confirmed', handleUpgradeConfirm);
+    document.addEventListener('bressol-pack-upgrade-confirmed', (event) => {
+        let form = resolveFormForTrigger(event.target);
+        if (!form && event.detail && event.detail.packId) {
+            form = document.querySelector(`.bressol-pack-form[data-pack-id="${event.detail.packId}"]`);
+        }
+        handleUpgradeConfirm(form);
+    });
 })();

@@ -20,8 +20,10 @@ Text Domain: bressol-theme
     --bressol-color-accent-focus: rgba(188, 175, 74, 0.45);
     --bressol-overlay: rgba(7, 12, 12, 0.35);
 
-    --bressol-font-body: "Segoe UI", "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
-    --bressol-font-heading: "Segoe UI", "Inter", "Helvetica Neue", Arial, system-ui, sans-serif;
+    --font-heading: "Cinzel", serif;
+    --font-body: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --bressol-font-body: var(--font-body);
+    --bressol-font-heading: var(--font-heading);
     --bressol-font-size-1: 0.85rem;
     --bressol-font-size-2: 0.95rem;
     --bressol-font-size-3: 1rem;
@@ -77,6 +79,30 @@ body {
     line-height: var(--bressol-line-height-body);
 }
 
+body,
+p,
+li,
+a,
+button,
+input,
+select,
+textarea {
+    font-family: var(--bressol-font-body);
+}
+
+h1,
+h2,
+h3,
+.bressol-title,
+.bressol-section-title {
+    font-family: var(--bressol-font-heading);
+    letter-spacing: 0.02em;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
 .bressol-container {
     max-width: 1120px;
     margin: 0 auto;
@@ -103,6 +129,7 @@ body {
     font-size: var(--bressol-font-size-6);
     font-family: var(--bressol-font-heading);
     line-height: var(--bressol-line-height-heading);
+    letter-spacing: 0.03em;
 }
 
 .bressol-lead {
@@ -124,17 +151,163 @@ body {
 }
 
 .bressol-hero__content {
-    flex: 1 1 55%;
+    flex: 1 1 56%;
+    max-width: 52ch;
 }
 
 .bressol-hero__visual {
-    flex: 1 1 45%;
-    min-height: 220px;
-    border-radius: var(--bressol-radius-3);
-    background: radial-gradient(circle at top left, rgba(188, 175, 74, 0.35), transparent 55%),
-        linear-gradient(150deg, rgba(188, 175, 74, 0.18), rgba(255, 255, 255, 0.9));
+    position: relative;
+    flex: 1 1 44%;
+    min-height: 320px;
+    border-radius: var(--bressol-radius-4);
+    background: radial-gradient(circle at top left, rgba(188, 175, 74, 0.28), transparent 55%),
+        linear-gradient(150deg, rgba(7, 12, 12, 0.12), rgba(255, 255, 255, 0.9));
+    background-size: cover;
+    background-position: center;
     border: 1px solid rgba(188, 175, 74, 0.25);
-    box-shadow: var(--bressol-shadow-1);
+    box-shadow: var(--bressol-shadow-2);
+    overflow: hidden;
+}
+
+.bressol-hero__visual::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 20% 20%, rgba(7, 12, 12, 0.45), transparent 55%),
+        radial-gradient(circle at 80% 80%, rgba(7, 12, 12, 0.35), transparent 55%),
+        linear-gradient(180deg, rgba(7, 12, 12, 0.35), rgba(7, 12, 12, 0.08));
+    mix-blend-mode: multiply;
+}
+
+.bressol-hero__visual::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.03),
+        rgba(255, 255, 255, 0.03) 1px,
+        transparent 1px,
+        transparent 4px
+    );
+    opacity: 0.3;
+}
+
+.bressol-hero--home .bressol-hero__inner {
+    min-height: 520px;
+}
+
+.bressol-hero--home .bressol-title {
+    font-size: clamp(2rem, 2.6vw, 2.8rem);
+    line-height: 1.15;
+}
+
+.bressol-hero__accent {
+    display: inline-block;
+    width: 72px;
+    height: 2px;
+    margin: var(--bressol-space-xs) 0 var(--bressol-space-sm);
+    background: var(--bressol-color-accent);
+    opacity: 0.7;
+}
+
+.bressol-sale .bressol-lead {
+    margin-bottom: var(--bressol-space-md);
+}
+
+.bressol-sale__grid .products {
+    display: grid;
+    gap: var(--bressol-space-lg);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.bressol-sale__grid .product {
+    border: 1px solid var(--bressol-border-soft);
+    border-radius: var(--bressol-radius-sm);
+    padding: var(--bressol-space-5);
+    background: linear-gradient(180deg, #FFFFFF 0%, #FBFAF7 100%);
+    display: flex;
+    flex-direction: column;
+    gap: var(--bressol-space-sm);
+}
+
+.bressol-sale__grid .product:hover,
+.bressol-sale__grid .product:focus-within {
+    box-shadow: var(--bressol-shadow-2);
+    transform: translateY(-2px);
+    border-color: rgba(7, 12, 12, 0.2);
+}
+
+.bressol-sale__grid .woocommerce-loop-product__title {
+    font-family: var(--bressol-font-heading);
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.bressol-sale__grid .product a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.bressol-sale__grid .product img {
+    width: 100%;
+    height: auto;
+    border-radius: var(--bressol-radius-3);
+}
+
+.bressol-sale__grid .onsale {
+    background: var(--bressol-color-accent-soft);
+    color: var(--bressol-color-text);
+    border: 1px solid var(--bressol-border-soft);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: var(--bressol-font-size-1);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.bressol-sale__grid del {
+    color: var(--bressol-color-muted);
+    opacity: 0.7;
+}
+
+.bressol-sale__grid ins {
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.bressol-sale .bressol-empty {
+    margin-top: var(--bressol-space-sm);
+}
+
+.bressol-categories__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bressol-card__media {
+    display: block;
+    border-radius: var(--bressol-radius-3);
+    overflow: hidden;
+    background: radial-gradient(circle at top left, rgba(188, 175, 74, 0.2), transparent 60%),
+        linear-gradient(150deg, rgba(188, 175, 74, 0.12), rgba(255, 255, 255, 0.9));
+    min-height: 140px;
+}
+
+.bressol-card__media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.bressol-card__media-placeholder {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 .bressol-hero--plp .bressol-hero__visual {
@@ -156,6 +329,107 @@ body {
 
 .bressol-pdp__summary {
     flex: 1 1 50%;
+}
+
+.bressol-pdp__summary {
+    display: grid;
+    gap: var(--bressol-space-sm);
+}
+
+.bressol-pdp__excerpt {
+    margin: 0;
+    color: var(--bressol-color-muted);
+    font-size: var(--bressol-font-size-4);
+}
+
+.bressol-pdp__price {
+    display: grid;
+    gap: var(--bressol-space-xs);
+}
+
+.bressol-pdp__price .stock {
+    font-size: var(--bressol-font-size-sm);
+    color: var(--bressol-color-muted);
+}
+
+.bressol-pdp__rating {
+    font-size: var(--bressol-font-size-sm);
+}
+
+.bressol-pack-hero__highlights {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bressol-space-xs);
+    font-size: var(--bressol-font-size-1);
+    color: var(--bressol-color-muted);
+}
+
+.bressol-pack-hero__highlights li {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-white);
+}
+
+.bressol-pack-hero__trust {
+    margin: 0;
+    font-size: var(--bressol-font-size-sm);
+    color: var(--bressol-color-muted);
+}
+
+.bressol-pack-hero__link {
+    margin: 0;
+}
+
+.bressol-pack-contents {
+    padding: var(--bressol-space-md);
+    border-radius: var(--bressol-radius-2);
+    border: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-white);
+    display: grid;
+    gap: var(--bressol-space-sm);
+}
+
+.bressol-pack-contents__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--bressol-space-xs);
+    font-size: var(--bressol-font-size-sm);
+}
+
+.bressol-pack-contents__note {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bressol-space-xs);
+    align-items: center;
+    color: var(--bressol-color-muted);
+}
+
+.bressol-pack-personalize {
+    background: var(--bressol-gray-100);
+}
+
+.bressol-pack-personalize__body {
+    display: grid;
+    gap: var(--bressol-space-md);
+}
+
+.bressol-pack-usecases .bressol-card {
+    border: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-white);
+}
+
+.bressol-compliance {
+    padding: var(--bressol-space-md);
+    border-radius: var(--bressol-radius-2);
+    border: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-white);
 }
 
 .bressol-pdp__visual {
@@ -185,6 +459,22 @@ body {
 
 .bressol-hero .bressol-cta-panel {
     margin-top: var(--bressol-space-sm);
+    justify-content: flex-start;
+    gap: var(--bressol-space-sm);
+}
+
+.bressol-hero__note {
+    margin: var(--bressol-space-sm) 0 0;
+    font-size: var(--bressol-font-size-2);
+    color: var(--bressol-color-muted);
+}
+
+.bressol-steps {
+    margin-top: var(--bressol-space-md);
+}
+
+.bressol-steps .bressol-prose {
+    margin-bottom: var(--bressol-space-sm);
 }
 
 .bressol-trust {
@@ -212,7 +502,7 @@ body {
     max-width: 720px;
     font-size: var(--bressol-font-size-3);
     color: var(--bressol-color-muted);
-    line-height: 1.7;
+    line-height: 1.75;
 }
 
 .bressol-prose p {
@@ -231,6 +521,10 @@ body {
 
 .bressol-prose--faq {
     max-width: 880px;
+}
+
+.bressol-allergen {
+    font-weight: 700;
 }
 
 .bressol-link {
@@ -256,8 +550,12 @@ body {
 
 .bressol-grid {
     display: grid;
-    gap: var(--bressol-space-md);
+    gap: var(--bressol-space-lg);
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.bressol-grid > * {
+    height: 100%;
 }
 
 .bressol-nav {
@@ -308,6 +606,9 @@ body {
     padding: var(--bressol-space-5);
     background: linear-gradient(180deg, #FFFFFF 0%, #FBFAF7 100%);
     transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: var(--bressol-space-sm);
 }
 
 .bressol-card:hover,
@@ -351,6 +652,240 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.08em;
     margin-bottom: var(--bressol-space-sm);
+}
+
+.bressol-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bressol-space-sm);
+}
+
+.bressol-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--bressol-border-soft);
+    text-decoration: none;
+    color: inherit;
+    font-size: var(--bressol-font-size-sm);
+    background: var(--bressol-white);
+    transition: border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bressol-chip--active {
+    border-color: var(--bressol-color-accent);
+    background: var(--bressol-color-accent-soft);
+    color: var(--bressol-color-text);
+    box-shadow: var(--bressol-shadow-1);
+}
+
+.bressol-chip--reset {
+    border-style: dashed;
+}
+
+.bressol-chip:hover {
+    border-color: var(--bressol-color-accent-hover);
+    box-shadow: var(--bressol-shadow-1);
+}
+
+.bressol-chip:focus-visible {
+    outline: var(--bressol-focus-outline);
+    outline-offset: var(--bressol-focus-offset);
+}
+
+.bressol-pack-meta {
+    margin-top: var(--bressol-space-sm);
+    font-size: var(--bressol-font-size-sm);
+    color: var(--bressol-color-muted);
+}
+
+.bressol-pack-card__media {
+    display: block;
+}
+
+.bressol-pack-card__media img {
+    width: 100%;
+    height: auto;
+    border-radius: var(--bressol-radius-3);
+}
+
+.bressol-pack-card__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bressol-space-xs);
+}
+
+.bressol-card__badge--primary {
+    background: var(--bressol-color-accent-soft);
+    border-color: rgba(188, 175, 74, 0.55);
+}
+
+.bressol-card__badge--secondary {
+    background: var(--bressol-white);
+    border-color: var(--bressol-border-soft);
+}
+
+.bressol-pack-card__price {
+    margin: 0 0 var(--bressol-space-sm);
+    font-size: var(--bressol-font-size-md);
+    font-weight: 600;
+}
+
+.bressol-pack-card__price del {
+    color: var(--bressol-color-muted);
+    margin-right: 6px;
+}
+
+.bressol-pack-card__price ins {
+    text-decoration: none;
+}
+
+.bressol-pack-card__attrs {
+    margin: 0 0 var(--bressol-space-sm);
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bressol-space-xs);
+    font-size: var(--bressol-font-size-1);
+    color: var(--bressol-color-muted);
+}
+
+.bressol-pack-card__attrs li {
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-white);
+}
+
+.bressol-pack-feature {
+    margin-top: var(--bressol-space-md);
+    padding: var(--bressol-space-md);
+    border-radius: var(--bressol-radius-2);
+    border: 1px solid rgba(188, 175, 74, 0.35);
+    background: var(--bressol-white);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bressol-space-md);
+}
+
+.bressol-decision-panel {
+    margin-top: var(--bressol-space-md);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--bressol-space-md);
+}
+
+.bressol-decision-panel__col {
+    padding: var(--bressol-space-md);
+    border-radius: var(--bressol-radius-2);
+    border: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-white);
+    display: grid;
+    gap: var(--bressol-space-sm);
+}
+
+.bressol-decision-panel__col ul {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--bressol-color-muted);
+    font-size: var(--bressol-font-size-sm);
+}
+
+.bressol-pack-grid__more {
+    margin-top: var(--bressol-space-md);
+}
+
+.bressol-origin-quality__list {
+    list-style: none;
+    margin: var(--bressol-space-md) 0 0;
+    padding: 0;
+    display: grid;
+    gap: var(--bressol-space-sm);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bressol-origin-quality__list li {
+    padding: var(--bressol-space-sm) var(--bressol-space-md);
+    border-radius: var(--bressol-radius-2);
+    border: 1px solid var(--bressol-border-soft);
+    background: var(--bressol-white);
+    font-size: var(--bressol-font-size-sm);
+}
+
+.bressol-agenda__grid {
+    display: grid;
+    gap: var(--bressol-space-lg);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.bressol-agenda__badge--market {
+    background: rgba(188, 175, 74, 0.16);
+    border-color: rgba(188, 175, 74, 0.45);
+}
+
+.bressol-agenda__badge--event {
+    background: rgba(188, 175, 74, 0.1);
+    border-color: rgba(188, 175, 74, 0.4);
+}
+
+.bressol-agenda__badge--generic {
+    background: var(--bressol-color-accent-soft);
+    border-color: rgba(188, 175, 74, 0.35);
+}
+
+.bressol-agenda__more {
+    margin-top: var(--bressol-space-md);
+}
+
+.bressol-agenda__detail {
+    margin-top: auto;
+    align-self: flex-start;
+}
+
+.bressol-agenda__empty {
+    border: 1px dashed var(--bressol-border-soft);
+    border-radius: var(--bressol-radius-sm);
+    padding: var(--bressol-space-5);
+    background: var(--bressol-gray-100);
+}
+
+.bressol-agenda__cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bressol-space-sm);
+    margin-top: var(--bressol-space-md);
+}
+
+@media (max-width: 720px) {
+    .bressol-agenda__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .bressol-origin-quality__list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 420px) {
+    .bressol-sale__grid .products {
+        grid-template-columns: 1fr;
+    }
+
+    .bressol-agenda__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .bressol-origin-quality__list {
+        grid-template-columns: 1fr;
+    }
+
+    .bressol-agenda__cta {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
 
 .bressol-form-shell {
@@ -406,6 +941,16 @@ body {
     background: var(--bressol-color-accent-soft);
     color: var(--bressol-color-text);
     transition: box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.bressol-button--ghost {
+    background: transparent;
+    border-color: var(--bressol-border-soft);
+}
+
+.bressol-button--ghost:hover {
+    border-color: var(--bressol-color-accent-hover);
+    box-shadow: var(--bressol-shadow-1);
 }
 
 .bressol-button:hover {
@@ -692,7 +1237,7 @@ body {
 
     .bressol-hero__visual {
         width: 100%;
-        min-height: 160px;
+        min-height: 220px;
     }
 
     .bressol-pdp__visual {
@@ -702,6 +1247,22 @@ body {
     .bressol-hero .bressol-cta-panel {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .bressol-grid {
+        gap: var(--bressol-space-md);
+    }
+
+    .bressol-cta-panel {
+        padding: var(--bressol-space-5);
+    }
+
+    .bressol-sale__grid .products {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .bressol-categories__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .bressol-header-cta {
@@ -714,6 +1275,21 @@ body {
         flex-wrap: wrap;
         width: 100%;
         justify-content: flex-start;
+    }
+
+    .bressol-pack-feature {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .bressol-decision-panel {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .bressol-categories__grid {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -873,4 +1449,22 @@ textarea:focus-visible {
 
 .bressol-hidden-field {
     display: none;
+}
+
+/* 1) Evitar que el summary tape el resto */
+.bressol-pack-summary {
+  max-height: min(360px, 60vh);
+  overflow: auto;
+  position: sticky;
+  top: 12px;
+  z-index: 2; /* suficiente para borde/sombra, no para tapar modales */
+}
+
+/* 2) En móvil: sticky suele ser mala UX aquí */
+@media (max-width: 720px) {
+  .bressol-pack-summary {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
 }
