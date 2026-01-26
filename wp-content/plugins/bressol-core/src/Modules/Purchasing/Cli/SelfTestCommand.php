@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bressol\Modules\Purchasing\Cli;
 
 use Bressol\Modules\Purchasing\Services\Capabilities;
+use Bressol\Modules\Purchasing\Services\PlanningStore;
 use Bressol\Modules\Purchasing\Services\Settings;
 use Bressol\Modules\Purchasing\Services\Ports\Adapters\CostLedgerAdapter;
 
@@ -36,7 +37,14 @@ final class SelfTestCommand
         \WP_CLI::log('Settings: purchase_planning_enabled=' . ($settings['purchase_planning_enabled'] ? 'true' : 'false'));
         \WP_CLI::log('Settings: purchasing_stock_sync_enabled=' . (!empty($settings['purchasing_stock_sync_enabled']) ? 'true' : 'false'));
         \WP_CLI::log('Settings: purchasing_cost_ledger_sync_enabled=' . (!empty($settings['purchasing_cost_ledger_sync_enabled']) ? 'true' : 'false'));
+        \WP_CLI::log('Settings: purchasing_planning_cycle_days=' . (int) ($settings['purchasing_planning_cycle_days'] ?? 0));
+        \WP_CLI::log('Settings: purchasing_planning_reminder_lead_days=' . (int) ($settings['purchasing_planning_reminder_lead_days'] ?? 0));
+        $nextShipment = (string) ($settings['purchasing_planning_next_shipment_date_utc'] ?? '');
+        \WP_CLI::log('Settings: purchasing_planning_next_shipment_date_utc=' . ($nextShipment !== '' ? $nextShipment : '(not set)'));
+        \WP_CLI::log('Settings: purchasing_planning_run_on_close_window=' . (!empty($settings['purchasing_planning_run_on_close_window']) ? 'true' : 'false'));
         \WP_CLI::log('Cost ledger adapter available: ' . (CostLedgerAdapter::is_available() ? 'true' : 'false'));
+        $store = new PlanningStore();
+        \WP_CLI::log('Planning latest run: ' . ($store->get_latest() ? 'yes' : 'no'));
 
         global $wpdb;
         $table = $wpdb->prefix . 'bressol_suppliers';

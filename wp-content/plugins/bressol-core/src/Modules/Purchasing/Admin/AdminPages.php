@@ -8,6 +8,8 @@ use Bressol\Modules\Purchasing\Domain\Enum\Status;
 use Bressol\Modules\Purchasing\Repositories\PurchaseOrderRepository;
 use Bressol\Modules\Purchasing\Repositories\ReceivingRepository;
 use Bressol\Modules\Purchasing\Repositories\SupplierRepository;
+use Bressol\Modules\Purchasing\PurchasingModule;
+use Bressol\Modules\Purchasing\Services\PlanningStore;
 use Bressol\Modules\Purchasing\Services\Settings;
 
 if (!defined('ABSPATH')) {
@@ -61,6 +63,15 @@ final class AdminPages
             $capability,
             'bressol-purchasing-receivings',
             [$this, 'renderReceivingsPage']
+        );
+
+        add_submenu_page(
+            'bressol-purchasing',
+            'Purchase Planning',
+            'Purchase Planning',
+            $capability,
+            'bressol-purchasing-planning',
+            [$this, 'renderPurchasePlanningPage']
         );
     }
 
@@ -148,6 +159,48 @@ final class AdminPages
         echo '</div>';
     }
 
+    public function renderPurchasePlanningPage(): void
+    {
+        $this->assert_can_manage();
+
+        $settings = new Settings();
+        $planningService = PurchasingModule::build_planning_service();
+        $store = new PlanningStore();
+        $latest = $store->get_latest();
+
+        $nextShipment = $settings->get_purchasing_planning_next_shipment_date_utc();
+        $isDue = $planningService->is_due();
+        $daysToShipment = $this->days_until($nextShipment);
+
+        echo '<div class="wrap">';
+        echo '<h1>Purchasing - Purchase Planning</h1>';
+        $this->render_notice();
+
+        echo '<p><strong>Planning enabled:</strong> ' . esc_html($settings->is_purchase_planning_enabled() ? 'ON' : 'OFF') . '</p>';
+        echo '<p><strong>Cron enabled:</strong> ' . esc_html($settings->is_purchasing_cron_enabled() ? 'ON' : 'OFF') . '</p>';
+        if ($nextShipment === '') {
+            echo '<p class="notice notice-warning" style="padding:8px 12px;">';
+            echo 'Missing next_shipment_date_utc setting. Set it before running planning.';
+            echo '</p>';
+        } else {
+            echo '<p><strong>Next shipment (UTC):</strong> ' . esc_html($nextShipment) . '</p>';
+            if ($daysToShipment !== null) {
+                echo '<p><strong>Days to shipment:</strong> ' . esc_html((string) $daysToShipment) . '</p>';
+            }
+        }
+        echo '<p><strong>Due?</strong> ' . esc_html($isDue ? 'yes' : 'no') . '</p>';
+
+        $this->render_planning_run_buttons();
+
+        if ($latest) {
+            $this->render_latest_run($latest);
+        } else {
+            echo '<p>No planning runs saved yet.</p>';
+        }
+
+        echo '</div>';
+    }
+
     private function assert_can_manage(): void
     {
         if (!$this->capabilities->current_user_can_sensitive()) {
@@ -192,6 +245,11 @@ final class AdminPages
             $message = 'Recepción creada.';
         } elseif ($notice === 'receiving_save_failed') {
             $message = 'No se pudo crear la recepción.';
+            $type = 'notice-error';
+        } elseif ($notice === 'planning_run_ok') {
+            $message = 'Planning ejecutado.';
+        } elseif ($notice === 'planning_run_failed') {
+            $message = 'No se pudo ejecutar planning.';
             $type = 'notice-error';
         }
 
@@ -720,5 +778,105 @@ final class AdminPages
             return $note;
         }
         return substr($note, 0, 60) . '…';
+    }
+
+    private function render_planning_run_buttons(): void
+    {
+        echo '<div style="margin:12px 0;">';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;margin-right:8px;">';
+        wp_nonce_field('bressol_purchasing_planning_run');
+        echo '<input type="hidden" name="action" value="bressol_purchasing_planning_run" />';
+        echo '<input type="hidden" name="dry_run" value="1" />';
+        echo '<button type="submit" class="button">Run now (dry-run)</button>';
+        echo '</form>';
+
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;">';
+        wp_nonce_field('bressol_purchasing_planning_run');
+        echo '<input type="hidden" name="action" value="bressol_purchasing_planning_run" />';
+        echo '<input type="hidden" name="dry_run" value="0" />';
+        echo '<button type="submit" class="button button-primary">Run now (save)</button>';
+        echo '</form>';
+        echo '</div>';
+    }
+
+    /** @param array<string, mixed> $latest */
+    private function render_latest_run(array $latest): void
+    {
+        $generatedAt = (string) ($latest['generated_at_utc'] ?? '');
+        $windowStart = (string) ($latest['window_start_utc'] ?? '');
+        $windowEnd = (string) ($latest['window_end_utc'] ?? '');
+        $inputs = $latest['inputs_available'] ?? [];
+        $suggestions = isset($latest['suggestions']) && is_array($latest['suggestions']) ? $latest['suggestions'] : [];
+
+        echo '<h2>Latest run</h2>';
+        echo '<p><strong>Generated at (UTC):</strong> ' . esc_html($generatedAt) . '</p>';
+        echo '<p><strong>Window:</strong> ' . esc_html($windowStart) . ' → ' . esc_html($windowEnd) . '</p>';
+        echo '<p><strong>Inputs:</strong> ' . esc_html($this->format_inputs_available($inputs)) . '</p>';
+
+        echo '<h3>Suggestions (top 50)</h3>';
+        echo '<table class="widefat striped" style="max-width:1200px;">';
+        echo '<thead><tr><th>SKU/Product</th><th>Stock</th><th>Demand</th><th>Suggested</th><th>Rationale</th></tr></thead><tbody>';
+
+        if ($suggestions === []) {
+            echo '<tr><td colspan="5">No suggestions.</td></tr>';
+            echo '</tbody></table>';
+            return;
+        }
+
+        $limit = 0;
+        foreach ($suggestions as $suggestion) {
+            if ($limit >= 50) {
+                break;
+            }
+            $limit++;
+            $sku = isset($suggestion['sku']) ? (string) $suggestion['sku'] : '';
+            $productId = isset($suggestion['product_id']) ? (int) $suggestion['product_id'] : 0;
+            $label = $sku !== '' ? $sku : ($productId > 0 ? 'Product #' . $productId : (string) ($suggestion['key'] ?? ''));
+            $stock = (int) ($suggestion['stock_qty'] ?? 0);
+            $demand = (int) ($suggestion['demand_qty'] ?? 0);
+            $suggested = (int) ($suggestion['suggested_buy_qty'] ?? 0);
+            $rationale = (string) ($suggestion['rationale'] ?? '');
+
+            echo '<tr>';
+            echo '<td>' . esc_html($label) . '</td>';
+            echo '<td>' . esc_html((string) $stock) . '</td>';
+            echo '<td>' . esc_html((string) $demand) . '</td>';
+            echo '<td>' . esc_html((string) $suggested) . '</td>';
+            echo '<td>' . esc_html($rationale) . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+    }
+
+    /** @param array<string, mixed> $inputs */
+    private function format_inputs_available(array $inputs): string
+    {
+        if ($inputs === []) {
+            return 'unknown';
+        }
+        $parts = [];
+        foreach (['inventory', 'forecasting', 'events', 'sales'] as $key) {
+            $value = !empty($inputs[$key]) ? 'yes' : 'no';
+            $parts[] = $key . '=' . $value;
+        }
+
+        return implode(', ', $parts);
+    }
+
+    private function days_until(string $dateUtc): ?int
+    {
+        if ($dateUtc === '') {
+            return null;
+        }
+
+        $date = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $dateUtc, new \DateTimeZone('UTC'));
+        if (!$date) {
+            return null;
+        }
+
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $diff = $date->getTimestamp() - $now->getTimestamp();
+        return (int) floor($diff / 86400);
     }
 }

@@ -36,6 +36,7 @@ final class Actions
         add_action('admin_post_bressol_purchasing_save_po', [$this, 'handle_save_po']);
         add_action('admin_post_bressol_purchasing_change_po_status', [$this, 'handle_change_po_status']);
         add_action('admin_post_bressol_purchasing_create_receiving', [$this, 'handle_create_receiving']);
+        add_action('admin_post_bressol_purchasing_planning_run', [$this, 'handle_planning_run']);
     }
 
     public function handle_add_supplier(): void
@@ -196,6 +197,27 @@ final class Actions
         }
 
         $this->redirect_with_notice('bressol-purchasing-pos', 'receiving_saved', ['view' => 'edit', 'po_id' => $poId]);
+    }
+
+    public function handle_planning_run(): void
+    {
+        if (!$this->capabilities->current_user_can_sensitive()) {
+            $this->redirect_with_notice('bressol-purchasing-planning', 'forbidden');
+        }
+
+        check_admin_referer('bressol_purchasing_planning_run');
+
+        $dryRun = isset($_POST['dry_run']) ? wp_unslash($_POST['dry_run']) : '1';
+        $dryRun = $dryRun === '1' || $dryRun === 1 || $dryRun === true;
+
+        try {
+            $service = PurchasingModule::build_planning_service();
+            $service->run($dryRun);
+        } catch (\Throwable $exception) {
+            $this->redirect_with_notice('bressol-purchasing-planning', 'planning_run_failed');
+        }
+
+        $this->redirect_with_notice('bressol-purchasing-planning', 'planning_run_ok');
     }
 
     private function handle_todo_action(string $nonceAction, string $page): void

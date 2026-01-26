@@ -63,3 +63,11 @@ Estados: draft, sent, confirmed, receiving, closed, cancelled (sin receivings ni
 - Idempotencia por po_id: `bressol_purchasing_once_po_costledger_{po_id}`.
 - Registra lineas del PO + customs_fees_cents (sin shipping).
 - Limitacion: v0.2 registra al cerrar PO; v0.3 puede registrar por receiving si hace falta granularidad.
+
+## v0.2 Purchase Planning Reminder
+- Ciclo base 42d, reminder 21d antes.
+- Requiere configurar `purchasing_planning_next_shipment_date_utc`.
+- Adapters: Inventory/Forecasting/Events/Sales; fallback Inventory a Woo (stock).
+- Propuesta minima basada en forecast o ventas (si no hay datos, queda vacio).
+- No crea POs automaticamente.
+- Sin PII.

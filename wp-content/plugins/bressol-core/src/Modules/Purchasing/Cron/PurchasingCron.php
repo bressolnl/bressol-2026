@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bressol\Modules\Purchasing\Cron;
 
 use Bressol\Modules\Purchasing\Services\AuditLogger;
+use Bressol\Modules\Purchasing\Services\PurchasePlanningService;
 use Bressol\Modules\Purchasing\Services\Settings;
 
 if (!defined('ABSPATH')) {
@@ -16,11 +17,13 @@ final class PurchasingCron
 
     private Settings $settings;
     private AuditLogger $auditLogger;
+    private PurchasePlanningService $planningService;
 
-    public function __construct(Settings $settings, AuditLogger $auditLogger)
+    public function __construct(Settings $settings, AuditLogger $auditLogger, PurchasePlanningService $planningService)
     {
         $this->settings = $settings;
         $this->auditLogger = $auditLogger;
+        $this->planningService = $planningService;
     }
 
     public function register(): void
@@ -40,11 +43,21 @@ final class PurchasingCron
             return;
         }
 
-        $this->auditLogger->log('purchasing_reminder_run', [
-            'result' => 'empty',
-            'window_weeks' => 6,
-            'reminder_weeks_before' => 3,
-        ]);
+        if (!$this->settings->is_purchasing_cron_enabled() || !$this->settings->is_purchase_planning_enabled()) {
+            return;
+        }
+
+        if (!$this->planningService->is_due()) {
+            return;
+        }
+
+        try {
+            $this->planningService->run(false);
+        } catch (\Throwable $exception) {
+            $this->auditLogger->log('planning_run_error', [
+                'result' => 'exception',
+            ]);
+        }
     }
 
     private function maybe_schedule(): void
