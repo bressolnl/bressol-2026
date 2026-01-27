@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 
-namespace Bressol\Modules\Crm\Admin;
+namespace Bressol\Modules\Esp\Admin;
 
-use Bressol\Modules\Crm\Services\Capabilities;
+use Bressol\Modules\Esp\Services\Capabilities;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -19,28 +19,28 @@ final class AdminPages
 
         add_submenu_page(
             'bressol',
-            'CRM',
-            'CRM',
+            'ESP',
+            'ESP',
             $capability,
-            'bressol_crm',
+            'bressol_esp',
             [$this, 'renderHome']
         );
 
         add_submenu_page(
             'bressol',
-            'CRM - Configuración',
+            'ESP - Configuración',
             'Configuración',
             $capability,
-            'bressol_crm_settings',
+            'bressol_esp_settings',
             [$this, 'renderSettings']
         );
 
         add_submenu_page(
             'bressol',
-            'Diagnóstico CRM',
+            'Diagnóstico ESP',
             'Diagnóstico',
             $capability,
-            'bressol_crm_diagnostics',
+            'bressol_esp_diagnostics',
             [DiagnosticsPage::class, 'render']
         );
     }
@@ -48,13 +48,13 @@ final class AdminPages
     public function renderHome(): void
     {
         $this->ensureAccess();
-        echo '<div class="wrap"><h1>CRM</h1><p>Página placeholder del módulo CRM.</p></div>';
+        echo '<div class="wrap"><h1>ESP</h1><p>Página placeholder del módulo ESP.</p></div>';
     }
 
     public function renderSettings(): void
     {
         $this->ensureAccess();
-        echo '<div class="wrap"><h1>Configuración CRM</h1><p>Página placeholder de configuración.</p></div>';
+        echo '<div class="wrap"><h1>Configuración ESP</h1><p>Página placeholder de configuración.</p></div>';
     }
 
     private function ensureAccess(): void
@@ -66,7 +66,6 @@ final class AdminPages
 
     private function ensure_parent_menu_exists(): void
     {
-        // Garantiza que el parent slug 'bressol' exista, para que WP genere URLs tipo admin.php?page=...
         global $menu;
         $slug = 'bressol';
 

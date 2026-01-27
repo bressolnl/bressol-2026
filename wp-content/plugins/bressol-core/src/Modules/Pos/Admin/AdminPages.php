@@ -17,13 +17,13 @@ if (!defined('ABSPATH')) {
 final class AdminPages
 {
     private PosSettings $settings;
-    private CustomerService $customerService;
-    private CustomerLookupService $lookupService;
+    private ?CustomerService $customerService;
+    private ?CustomerLookupService $lookupService;
 
     public function __construct(
         PosSettings $settings,
-        CustomerService $customerService,
-        CustomerLookupService $lookupService
+        ?CustomerService $customerService,
+        ?CustomerLookupService $lookupService
     )
     {
         $this->settings = $settings;
@@ -88,8 +88,14 @@ final class AdminPages
             wp_die('No autorizado.');
         }
 
+        $crmAvailable = $this->is_crm_available();
+        $crmDisabled = $crmAvailable ? '' : ' disabled';
+
         echo '<div class="wrap bressol-pos">';
         echo '<h1>POS - Nueva venta</h1>';
+        if (!$crmAvailable) {
+            echo '<div class="notice notice-warning"><p>CRM no disponible: loyalty/canje desactivado.</p></div>';
+        }
         echo '<div id="bressol-pos-root" class="bressol-pos__layout">';
         echo '<div class="bressol-pos__panel">';
         echo '<h2>Mercado</h2>';
@@ -104,20 +110,20 @@ final class AdminPages
         echo '<h2>Cliente</h2>';
         echo '<label>Token / ID</label>';
         echo '<div class="bressol-pos__row">';
-        echo '<input type="text" data-pos-customer-token placeholder="Token o ID" />';
-        echo '<button type="button" class="button" data-pos-customer-search>Buscar</button>';
-        echo '<button type="button" class="button" data-pos-customer-clear>Limpiar</button>';
+        echo '<input type="text" data-pos-customer-token placeholder="Token o ID"' . $crmDisabled . ' />';
+        echo '<button type="button" class="button" data-pos-customer-search' . $crmDisabled . '>Buscar</button>';
+        echo '<button type="button" class="button" data-pos-customer-clear' . $crmDisabled . '>Limpiar</button>';
         echo '</div>';
         echo '<label style="margin-top:8px;"><input type="checkbox" data-pos-anonymous-toggle /> Venta anónima</label>';
         echo '<p data-pos-customer-summary class="bressol-pos__muted">Venta anónima</p>';
         echo '<div class="bressol-pos__row">';
-        echo '<label><input type="checkbox" data-pos-loyalty-opt /> Loyalty</label>';
-        echo '<label><input type="checkbox" data-pos-marketing-opt /> Marketing</label>';
+        echo '<label><input type="checkbox" data-pos-loyalty-opt' . $crmDisabled . ' /> Loyalty</label>';
+        echo '<label><input type="checkbox" data-pos-marketing-opt' . $crmDisabled . ' /> Marketing</label>';
         echo '</div>';
         echo '<div class="bressol-pos__panel" style="margin-top:12px;">';
         echo '<h3>Canje de puntos</h3>';
         echo '<label>Puntos a canjear</label>';
-        echo '<input type="number" min="0" data-pos-points-redeem value="0" />';
+        echo '<input type="number" min="0" data-pos-points-redeem value="0"' . $crmDisabled . ' />';
         echo '<p class="bressol-pos__muted">Valor: <span data-pos-points-value>0,00 €</span></p>';
         echo '<p class="bressol-pos__muted" data-pos-points-notice></p>';
         echo '</div>';
@@ -176,6 +182,14 @@ final class AdminPages
     {
         if (!$this->current_user_can()) {
             wp_die('No autorizado.');
+        }
+
+        if (!$this->is_crm_available()) {
+            echo '<div class="wrap bressol-pos">';
+            echo '<h1>POS - Clientes</h1>';
+            echo '<div class="notice notice-warning"><p>CRM no disponible: loyalty/canje desactivado.</p></div>';
+            echo '</div>';
+            return;
         }
 
         $this->handle_customer_create_post();
@@ -697,6 +711,11 @@ final class AdminPages
             return null;
         }
 
+        if ($this->lookupService === null) {
+            add_settings_error('bressol_pos_customers', 'pos_crm_unavailable', 'CRM no disponible.', 'error');
+            return null;
+        }
+
         check_admin_referer('bressol_pos_customer_lookup');
 
         $token = isset($_POST['pos_public_id']) ? sanitize_text_field(wp_unslash($_POST['pos_public_id'])) : '';
@@ -733,6 +752,11 @@ final class AdminPages
             return null;
         }
 
+        if ($this->lookupService === null) {
+            add_settings_error('bressol_pos_customers', 'pos_crm_unavailable', 'CRM no disponible.', 'error');
+            return null;
+        }
+
         check_admin_referer('bressol_pos_customer_regenerate');
 
         $customerId = isset($_POST['customer_id']) ? absint($_POST['customer_id']) : 0;
@@ -766,6 +790,11 @@ final class AdminPages
             return;
         }
 
+        if ($this->customerService === null || $this->lookupService === null) {
+            add_settings_error('bressol_pos_customers', 'pos_crm_unavailable', 'CRM no disponible.', 'error');
+            return;
+        }
+
         check_admin_referer('bressol_pos_customer_create');
 
         $payload = [
@@ -794,5 +823,10 @@ final class AdminPages
         if (!empty($result['warning'])) {
             add_settings_error('bressol_pos_customers', $result['warning_code'] ?? 'pos_customer_warning', (string) $result['warning'], 'warning');
         }
+    }
+
+    private function is_crm_available(): bool
+    {
+        return $this->customerService !== null && $this->lookupService !== null;
     }
 }

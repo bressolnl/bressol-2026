@@ -34,8 +34,8 @@ final class Plugin
         $this->modules[] = new \Bressol\Modules\PostAddToCartModal\PostAddToCartModalModule();
         $this->modules[] = new \Bressol\Modules\Taxonomies\TaxonomiesModule();
         $this->modules[] = new \Bressol\Modules\Seo\SeoMetaModule();
-        $this->modules[] = new \Bressol\Modules\Esp\EspModule();
-        $this->modules[] = new \Bressol\Modules\Crm\CrmModule();
+        $this->modules[] = new \Bressol\Modules\Esp\Module();
+        $this->modules[] = new \Bressol\Modules\Crm\Module();
         $this->modules[] = new \Bressol\Modules\Pos\PosModule();
         $this->modules[] = new \Bressol\Modules\SalesAnalytics\SalesAnalyticsModule();
         $this->modules[] = new \Bressol\Modules\MarketsEvents\MarketsEventsModule();

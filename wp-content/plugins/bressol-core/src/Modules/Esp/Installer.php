@@ -169,7 +169,9 @@ final class Installer
             dbDelta($tableSql);
         }
 
+        // Importante: sembrar capability YA (por vuestro bootstrap en init)
         (new Capabilities())->seed_admin_cap();
-        update_option('bressol_esp_version', self::VERSION);
+
+        update_option('bressol_esp_version', self::VERSION, false);
     }
 }

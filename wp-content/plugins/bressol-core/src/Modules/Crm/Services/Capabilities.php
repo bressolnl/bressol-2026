@@ -11,17 +11,9 @@ final class Capabilities
 {
     public const CAP = 'bressol_manage_crm';
 
-    /** Back-compat alias (Installer used seed_roles historically). */
-    public function seed_roles(): void
-    {
-        $this->seed_admin_cap();
-    }
-
     public function register(): void
     {
-        // Must run BEFORE wp-admin capability checks for admin pages.
-        // admin_init is too late -> causes "Sorry, you are not allowed..."
-        add_action('init', [$this, 'seed_admin_cap'], 1);
+        add_action('admin_init', [$this, 'seed_admin_cap']);
     }
 
     public function seed_admin_cap(): void

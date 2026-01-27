@@ -58,8 +58,11 @@ final class PosModule implements ModuleInterface
 
         $settings = new PosSettings();
         $auditLogger = class_exists(AuditLogger::class) ? new AuditLogger() : null;
-        $customerService = new CustomerService($auditLogger);
-        $lookupService = new CustomerLookupService($customerService, $auditLogger);
+        $customerService = class_exists(CustomerService::class) ? new CustomerService($auditLogger) : null;
+        $lookupService = null;
+        if ($customerService !== null && class_exists(CustomerLookupService::class)) {
+            $lookupService = new CustomerLookupService($customerService, $auditLogger);
+        }
         $adminPages = new AdminPages($settings, $customerService, $lookupService);
 
         add_action('admin_menu', [$adminPages, 'registerMenus']);
@@ -125,6 +128,10 @@ final class PosModule implements ModuleInterface
 
         $token = isset($_POST['token']) ? sanitize_text_field(wp_unslash($_POST['token'])) : '';
         $customerId = isset($_POST['customer_id']) ? absint($_POST['customer_id']) : 0;
+
+        if (!class_exists(CustomerService::class) || !class_exists(CustomerLookupService::class)) {
+            $this->send_pos_error('pos_crm_unavailable', 'CRM no disponible.', 503);
+        }
 
         $auditLogger = class_exists(AuditLogger::class) ? new AuditLogger() : null;
         $customerService = new CustomerService($auditLogger);
@@ -308,7 +315,12 @@ final class PosModule implements ModuleInterface
             $this->send_pos_error('pos_margin_blocked', 'Margen insuficiente.', 422, $marginPayload);
         }
 
-        $customerService = new CustomerService($auditLogger);
+        $customerService = class_exists(CustomerService::class) ? new CustomerService($auditLogger) : null;
+        $crmRequired = $customerId > 0 || $pointsRedeem > 0 || $loyaltyOptIn === 'yes' || $marketingOptIn === 'yes';
+        if ($crmRequired && $customerService === null) {
+            $this->send_pos_error('pos_crm_unavailable', 'CRM no disponible.', 503);
+        }
+
         $crmCustomerId = null;
         if ($customerId > 0) {
             $customer = $customerService->get_customer($customerId);
@@ -318,6 +330,7 @@ final class PosModule implements ModuleInterface
         }
 
         $redemptionValueCents = 0;
+        $pointsService = null;
         if ($pointsRedeem > 0) {
             if ($crmCustomerId === null) {
                 $this->send_pos_error('pos_customer_inactive', 'Cliente no apto para canje.', 422);
@@ -352,6 +365,9 @@ final class PosModule implements ModuleInterface
                 $this->send_pos_error('pos_redemption_exceeds_total', 'El canje no puede dejar el total en negativo.', 422);
             }
 
+            if (!class_exists(PointsService::class) || !class_exists(CrmSettings::class) || !class_exists(AuditLogger::class)) {
+                $this->send_pos_error('pos_crm_unavailable', 'CRM no disponible.', 503);
+            }
             $pointsService = new PointsService(new CrmSettings(), $auditLogger ?? new AuditLogger());
             $balance = $pointsService->get_balance($crmCustomerId);
             if ($pointsRedeem > $balance) {
@@ -426,8 +442,7 @@ final class PosModule implements ModuleInterface
             ]);
         }
 
-        if ($pointsRedeem > 0 && $crmCustomerId !== null) {
-            $pointsService = new PointsService(new CrmSettings(), $auditLogger ?? new AuditLogger());
+        if ($pointsRedeem > 0 && $crmCustomerId !== null && $pointsService instanceof PointsService) {
             $reference = 'pos-order-' . $order->get_id();
             $order->update_meta_data('_bressol_pos_redemption_reference', $reference);
             $redemptionId = $pointsService->create_redemption($crmCustomerId, $pointsRedeem, 'pos', $reference, null);

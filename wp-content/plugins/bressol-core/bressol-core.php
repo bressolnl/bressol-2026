@@ -39,12 +39,15 @@ spl_autoload_register(static function (string $class): void {
 
 register_activation_hook(__FILE__, static function (): void {
     \Bressol\Modules\Esp\Installer::install();
-    \Bressol\Modules\Esp\EspModule::scheduleCron();
+    \Bressol\Modules\Esp\Module::scheduleCron();
+    \Bressol\Modules\Crm\Installer::install();
+    \Bressol\Modules\Crm\Module::scheduleCron();
     \Bressol\Modules\Pos\PosModule::schedule_cron();
 });
 
 register_deactivation_hook(__FILE__, static function (): void {
-    \Bressol\Modules\Esp\EspModule::clearCron();
+    \Bressol\Modules\Esp\Module::clearCron();
+    \Bressol\Modules\Crm\Module::clearCron();
     \Bressol\Modules\Pos\PosModule::clear_cron();
 });
 
@@ -54,13 +57,4 @@ add_action('init', static function (): void {
     $plugin->register();
 });
 
-register_activation_hook(__FILE__, static function (): void {
-    // Instalación inicial de CRM (tablas y versión).
-    (new \Bressol\Modules\Crm\Installer())->install();
-    \Bressol\Modules\Crm\CrmModule::schedule_cron();
-});
-
-register_deactivation_hook(__FILE__, static function (): void {
-    // Limpieza de cron CRM al desactivar el plugin.
-    \Bressol\Modules\Crm\CrmModule::clear_cron();
-});
+// CRM activation/deactivation handled above.

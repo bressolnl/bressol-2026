@@ -153,14 +153,11 @@ final class Installer
             dbDelta($tableSql);
         }
 
-        $settings = new Settings();
-        $settings->ensure_defaults();
+        (new Settings())->ensure_defaults();
 
-        // Manual test (activation): deactivate/activate plugin and verify table exists via
-        // wp db query "SHOW TABLES LIKE '%bressol_crm_order_sync%'".
-        // Manual test (upgrade): set bressol_crm_version to 1.1.0 and reload admin,
-        // then confirm order_sync table exists and version updated to 1.3.0.
+        // Importante: sembrar capability YA (por vuestro bootstrap en init)
         (new Capabilities())->seed_admin_cap();
-        update_option('bressol_crm_version', self::VERSION);
+
+        update_option('bressol_crm_version', self::VERSION, false);
     }
 }
