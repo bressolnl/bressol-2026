@@ -230,9 +230,11 @@ final class AdminPages
                 $pricelistUrl = $this->build_public_url('pricelist', $token);
                 echo '<h3>Enlaces privados</h3>';
                 echo '<p><input type="text" class="regular-text b2b-copy-input" readonly value="' . esc_attr($catalogUrl) . '" /> ';
-                echo '<button type="button" class="button b2b-copy-btn" data-url="' . esc_attr($catalogUrl) . '">Copiar enlace catálogo</button></p>';
+                echo '<button type="button" class="button b2b-copy-btn" data-url="' . esc_attr($catalogUrl)
+                    . '" data-default-label="Copiar enlace catálogo">Copiar enlace catálogo</button></p>';
                 echo '<p><input type="text" class="regular-text b2b-copy-input" readonly value="' . esc_attr($pricelistUrl) . '" /> ';
-                echo '<button type="button" class="button b2b-copy-btn" data-url="' . esc_attr($pricelistUrl) . '">Copiar enlace pricelist</button></p>';
+                echo '<button type="button" class="button b2b-copy-btn" data-url="' . esc_attr($pricelistUrl)
+                    . '" data-default-label="Copiar enlace pricelist">Copiar enlace pricelist</button></p>';
             }
 
             $timeline = $this->events->list_by_lead($leadId, 50);
@@ -309,9 +311,16 @@ final class AdminPages
                     if (!btn) return;
                     var url = btn.getAttribute("data-url") || "";
                     if (!url) return;
+                    var defaultLabel = btn.getAttribute("data-default-label") || btn.textContent || "Copiar enlace";
+                    var done = function() {
+                        btn.textContent = "Copiado";
+                        window.setTimeout(function() {
+                            btn.textContent = defaultLabel;
+                        }, 2000);
+                    };
                     if (navigator.clipboard && navigator.clipboard.writeText) {
                         navigator.clipboard.writeText(url).then(function() {
-                            btn.textContent = "Copiado";
+                            done();
                         });
                         return;
                     }
@@ -321,7 +330,7 @@ final class AdminPages
                     input.select();
                     try { document.execCommand("copy"); } catch (e) {}
                     document.body.removeChild(input);
-                    btn.textContent = "Copiado";
+                    done();
                 }, {capture: true});
             </script>';
         }
