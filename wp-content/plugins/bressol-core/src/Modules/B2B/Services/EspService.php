@@ -24,49 +24,11 @@ final class EspService
         $membersTable = $wpdb->prefix . 'bressol_esp_list_members';
         $campaignsTable = $wpdb->prefix . 'bressol_esp_campaigns';
 
-        $tables = [$listsTable, $membersTable, $campaignsTable];
-        foreach ($tables as $table) {
-            $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
-            if ($exists !== $table) {
-                return false;
-            }
-        }
-
         $now = current_time('mysql');
-        $listName = 'B2B Lead ' . $leadId;
-        $listId = (int) $wpdb->get_var(
-            $wpdb->prepare("SELECT id FROM {$listsTable} WHERE name = %s LIMIT 1", $listName)
-        );
-        if ($listId <= 0) {
-            $wpdb->insert(
-                $listsTable,
-                [
-                    'name' => $listName,
-                    'created_at' => $now,
-                ],
-                ['%s', '%s']
-            );
-            $listId = (int) $wpdb->insert_id;
-        }
-
+        $listId = $this->ensure_list_member($leadId, $email, $now, $listsTable, $membersTable);
         if ($listId <= 0) {
             return false;
         }
-
-        $wpdb->query(
-            $wpdb->prepare(
-                "INSERT INTO {$membersTable} (list_id, email, customer_id, status, created_at, updated_at)
-                 VALUES (%d, %s, %d, %s, %s, %s)
-                 ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = VALUES(updated_at)",
-                $listId,
-                $email,
-                null,
-                'subscribed',
-                $now,
-                $now
-            )
-        );
-
         $subject = 'Bressol B2B: catalogus & prijslijst';
         $body = $this->build_email_body($token);
 
@@ -94,6 +56,7 @@ final class EspService
         return true;
     }
 
+
     private function build_email_body(string $token): string
     {
         $catalogUrl = add_query_arg(['token' => $token], home_url('/b2b/catalog'));
@@ -109,5 +72,59 @@ final class EspService
         $html .= '<p>Met vriendelijke groet,<br/>Bressol</p>';
 
         return $html;
+    }
+
+
+    private function ensure_list_member(
+        int $leadId,
+        string $email,
+        string $now,
+        string $listsTable,
+        string $membersTable
+    ): int {
+        global $wpdb;
+        $tables = [$listsTable, $membersTable, $wpdb->prefix . 'bressol_esp_campaigns'];
+        foreach ($tables as $table) {
+            $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+            if ($exists !== $table) {
+                return 0;
+            }
+        }
+
+        $listName = 'B2B Lead ' . $leadId;
+        $listId = (int) $wpdb->get_var(
+            $wpdb->prepare("SELECT id FROM {$listsTable} WHERE name = %s LIMIT 1", $listName)
+        );
+        if ($listId <= 0) {
+            $wpdb->insert(
+                $listsTable,
+                [
+                    'name' => $listName,
+                    'created_at' => $now,
+                ],
+                ['%s', '%s']
+            );
+            $listId = (int) $wpdb->insert_id;
+        }
+
+        if ($listId <= 0) {
+            return 0;
+        }
+
+        $wpdb->query(
+            $wpdb->prepare(
+                "INSERT INTO {$membersTable} (list_id, email, customer_id, status, created_at, updated_at)
+                 VALUES (%d, %s, %d, %s, %s, %s)
+                 ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = VALUES(updated_at)",
+                $listId,
+                $email,
+                null,
+                'subscribed',
+                $now,
+                $now
+            )
+        );
+
+        return $listId;
     }
 }

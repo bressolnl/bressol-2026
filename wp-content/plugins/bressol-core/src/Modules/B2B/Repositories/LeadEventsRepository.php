@@ -87,6 +87,7 @@ final class LeadEventsRepository
         return $this->has_recent_event($leadId, $type, $minutes * 60);
     }
 
+
     private function table(): string
     {
         global $wpdb;

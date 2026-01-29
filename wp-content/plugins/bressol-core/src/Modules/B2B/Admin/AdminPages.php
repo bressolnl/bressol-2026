@@ -175,6 +175,7 @@ final class AdminPages
             'company_name' => '',
             'contact_name' => '',
             'phone' => '',
+            'business_type' => '',
             'tier' => $this->default_tier(),
             'status' => 'NEEDS_CONSENT',
             'contact_basis' => 'no_consent',
@@ -200,6 +201,7 @@ final class AdminPages
         echo $this->render_text_row('Empresa', 'company_name', (string) ($lead['company_name'] ?? ''), false);
         echo $this->render_text_row('Contacto', 'contact_name', (string) ($lead['contact_name'] ?? ''), false);
         echo $this->render_text_row('Teléfono', 'phone', (string) ($lead['phone'] ?? ''), false);
+        echo $this->render_select_row('Business type', 'business_type', (string) ($lead['business_type'] ?? ''), $this->business_type_options());
         echo $this->render_select_row('Tier', 'tier', (string) ($lead['tier'] ?? ''), $this->get_tier_options());
         echo $this->render_select_row('Estado', 'status', (string) ($lead['status'] ?? ''), $this->status_options());
         echo $this->render_select_row('Contact basis', 'contact_basis', (string) ($lead['contact_basis'] ?? ''), $this->contact_basis_options());
@@ -435,6 +437,7 @@ final class AdminPages
             'company_name' => isset($input['company_name']) ? sanitize_text_field((string) wp_unslash($input['company_name'])) : '',
             'contact_name' => isset($input['contact_name']) ? sanitize_text_field((string) wp_unslash($input['contact_name'])) : '',
             'phone' => isset($input['phone']) ? sanitize_text_field((string) wp_unslash($input['phone'])) : '',
+            'business_type' => isset($input['business_type']) ? sanitize_key((string) wp_unslash($input['business_type'])) : '',
             'tier' => isset($input['tier']) ? sanitize_key((string) wp_unslash($input['tier'])) : '',
             'status' => isset($input['status']) ? sanitize_key((string) wp_unslash($input['status'])) : '',
             'contact_basis' => isset($input['contact_basis']) ? sanitize_key((string) wp_unslash($input['contact_basis'])) : '',
@@ -602,6 +605,18 @@ final class AdminPages
             'no_consent' => 'no_consent',
             'consent_explicit' => 'consent_explicit',
             'relationship_1to1_followup' => 'relationship_1to1_followup',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function business_type_options(): array
+    {
+        return [
+            '' => '-',
+            'gourmet' => 'gourmet',
+            'horeca' => 'horeca',
+            'corporate' => 'corporate',
+            'other' => 'other',
         ];
     }
 

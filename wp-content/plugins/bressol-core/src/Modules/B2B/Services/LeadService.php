@@ -68,6 +68,7 @@ final class LeadService
         $data['company_name'] = isset($payload['company_name']) ? sanitize_text_field((string) $payload['company_name']) : ($data['company_name'] ?? null);
         $data['contact_name'] = isset($payload['contact_name']) ? sanitize_text_field((string) $payload['contact_name']) : ($data['contact_name'] ?? null);
         $data['phone'] = isset($payload['phone']) ? sanitize_text_field((string) $payload['phone']) : ($data['phone'] ?? null);
+        $data['business_type'] = isset($payload['business_type']) ? $this->sanitize_business_type((string) $payload['business_type']) : ($data['business_type'] ?? null);
         $data['tier'] = isset($payload['tier']) ? $this->sanitize_tier((string) $payload['tier']) : ($data['tier'] ?? $this->default_tier());
         $data['status'] = isset($payload['status']) ? $this->sanitize_status((string) $payload['status']) : ($data['status'] ?? 'NEEDS_CONSENT');
         $data['contact_basis'] = isset($payload['contact_basis']) ? $this->sanitize_contact_basis((string) $payload['contact_basis']) : ($data['contact_basis'] ?? 'no_consent');
@@ -134,6 +135,11 @@ final class LeadService
 
     public function apply_consent(int $leadId): bool
     {
+        return $this->apply_consent_with_task($leadId, 'call_after_consent', 'Bel deze lead (nieuw consent)', 48);
+    }
+
+    public function apply_consent_with_task(int $leadId, string $taskType, string $taskNote, int $dueHours): bool
+    {
         if ($leadId <= 0) {
             return false;
         }
@@ -160,11 +166,9 @@ final class LeadService
         }
 
         $this->leads->increment_score($leadId, 5);
-        $this->events->insert_event($leadId, 'consent_given', [
-            'email' => $this->mask_email((string) ($lead['email'] ?? '')),
-        ]);
+        $this->events->insert_event($leadId, 'consent_given', []);
 
-        $this->tasks->create_auto_task($leadId, 'call_after_consent', 'Bel deze lead (nieuw consent)', 48);
+        $this->tasks->create_auto_task($leadId, $taskType, $taskNote, $dueHours);
 
         $espRecentlyQueued = $this->events->has_recent_event($leadId, 'esp_email_queued', 86400);
         if (!$espRecentlyQueued) {
@@ -176,6 +180,32 @@ final class LeadService
 
         return true;
     }
+
+    /** @param array<string, mixed> $payload
+     *  @return array{lead_id:int,is_new:bool,errors:array<int,string>}
+     */
+    public function register_signup(array $payload): array
+    {
+        $payload['source'] = 'signup';
+        $payload['contact_basis'] = 'consent_explicit';
+        $payload['status'] = 'CONSENTED';
+        $payload['consented_at'] = current_time('mysql');
+
+        $result = $this->create_or_update($payload, 0, 'signup');
+        if ($result['lead_id'] <= 0) {
+            return $result;
+        }
+
+        $leadId = $result['lead_id'];
+        $lead = $this->leads->find_by_id($leadId);
+        if (!$lead) {
+            return $result;
+        }
+
+        $this->apply_consent_with_task($leadId, 'follow_up', 'Follow-up', 48);
+        return $result;
+    }
+
 
     public function regenerate_token(int $leadId): bool
     {
@@ -287,6 +317,16 @@ final class LeadService
         $tier = sanitize_key($tier);
         $tiers = $this->settings->get_tier_options();
         return in_array($tier, $tiers, true) ? $tier : $this->default_tier();
+    }
+
+    private function sanitize_business_type(string $type): string
+    {
+        $type = sanitize_key($type);
+        if ($type === '') {
+            return '';
+        }
+        $allowed = ['gourmet', 'horeca', 'corporate', 'other'];
+        return in_array($type, $allowed, true) ? $type : 'other';
     }
 
     private function sanitize_source(string $source): string

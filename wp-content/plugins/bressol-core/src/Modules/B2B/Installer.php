@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 
 final class Installer
 {
-    public const VERSION = '0.1.2';
+    public const VERSION = '0.1.3';
     private const VERSION_OPTION = 'bressol_b2b_schema_version';
 
     public static function maybe_upgrade(): void
@@ -45,6 +45,7 @@ final class Installer
             company_name VARCHAR(190) NULL,
             contact_name VARCHAR(190) NULL,
             phone VARCHAR(50) NULL,
+            business_type VARCHAR(30) NULL,
             tier VARCHAR(30) NOT NULL,
             status VARCHAR(20) NOT NULL,
             contact_basis VARCHAR(60) NOT NULL,

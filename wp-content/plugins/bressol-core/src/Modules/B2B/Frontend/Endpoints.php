@@ -14,6 +14,7 @@ final class Endpoints
 {
     private const TOKEN_REGEX = '/^[a-f0-9]{64}$/';
     private const CONSENT_THROTTLE_SECONDS = 60;
+    private const SIGNUP_THROTTLE_SECONDS = 60;
     private const GENERIC_ERROR = 'Deze link is ongeldig of verlopen.';
 
     private LeadRepository $leads;
@@ -29,6 +30,7 @@ final class Endpoints
     {
         add_rewrite_rule('^b2b/catalog/?$', 'index.php?bressol_b2b=catalog', 'top');
         add_rewrite_rule('^b2b/pricelist/?$', 'index.php?bressol_b2b=pricelist', 'top');
+        add_rewrite_rule('^b2b/signup/?$', 'index.php?bressol_b2b=signup', 'top');
     }
 
     /** @param string[] $vars
@@ -43,7 +45,12 @@ final class Endpoints
     public function handle_request(): void
     {
         $page = get_query_var('bressol_b2b');
-        if (!in_array($page, ['catalog', 'pricelist'], true)) {
+        if (!in_array($page, ['catalog', 'pricelist', 'signup'], true)) {
+            return;
+        }
+
+        if ($page === 'signup') {
+            $this->handle_signup_request();
             return;
         }
 
@@ -148,7 +155,6 @@ final class Endpoints
         if ($consentJustGiven) {
             echo '<p><strong>Bedankt! We hebben je toestemming geregistreerd.</strong></p>';
         }
-
         echo '</div>';
         echo '<script>
             window.dataLayer = window.dataLayer || [];
@@ -166,6 +172,98 @@ final class Endpoints
         </script>';
         if ($consentJustGiven) {
             echo '<script>window.dataLayer.push({event:"b2b_consent_given", lead_id:' . (int) $leadId . ', source:"b2b"});</script>';
+        }
+        echo '</body></html>';
+        exit;
+    }
+
+    private function handle_signup_request(): void
+    {
+        $success = false;
+        $errors = [];
+        $leadId = 0;
+        $token = '';
+
+        if ($this->is_signup_submission()) {
+            if (!$this->verify_signup_nonce()) {
+                $this->render_error(self::GENERIC_ERROR);
+                return;
+            }
+
+            $payload = $this->get_signup_payload($_POST);
+            if (!$payload['consent']) {
+                $errors[] = 'Toestemming is verplicht.';
+            }
+
+            $emailLower = strtolower($payload['email']);
+            if ($emailLower === '' || !is_email($payload['email'])) {
+                $errors[] = 'Vul een geldig e-mailadres in.';
+            }
+
+            if ($errors === [] && $this->is_signup_throttled($emailLower)) {
+                $errors[] = 'Probeer later opnieuw.';
+            }
+
+            if ($errors === []) {
+                $this->touch_signup_throttle($emailLower);
+                $result = $this->leadService->register_signup([
+                    'email' => $payload['email'],
+                    'business_type' => $payload['business_type'],
+                ]);
+                $success = $result['lead_id'] > 0;
+                $leadId = $result['lead_id'];
+                if ($success) {
+                    $lead = $this->leads->find_by_id($leadId);
+                    $token = (string) ($lead['consent_token'] ?? '');
+                } else {
+                    $errors = $result['errors'] !== [] ? $result['errors'] : ['Er ging iets mis.'];
+                }
+            }
+        }
+
+        $this->render_signup_page($success, $errors, $leadId, $token);
+    }
+
+    /** @param array<int, string> $errors */
+    private function render_signup_page(bool $success, array $errors, int $leadId, string $token): void
+    {
+        status_header(200);
+        nocache_headers();
+
+        $title = 'B2B aanmelden';
+        $catalogUrl = $token !== '' ? add_query_arg(['token' => $token], home_url('/b2b/catalog')) : '';
+        $pricelistUrl = $token !== '' ? add_query_arg(['token' => $token], home_url('/b2b/pricelist')) : '';
+
+        echo '<!doctype html><html><head><meta charset="utf-8"><title>' . esc_html($title) . '</title></head><body>';
+        echo '<div style="max-width:640px;margin:40px auto;font-family:Arial, sans-serif;">';
+        echo '<h1>' . esc_html($title) . '</h1>';
+
+        if ($success) {
+            echo '<p><strong>Bedankt! Je aanmelding is ontvangen.</strong></p>';
+            if ($catalogUrl !== '' && $pricelistUrl !== '') {
+                echo '<p>Je kunt de documenten hieronder bekijken:</p>';
+                echo '<ul>';
+                echo '<li><a href="' . esc_url($catalogUrl) . '">Catalogus downloaden</a></li>';
+                echo '<li><a href="' . esc_url($pricelistUrl) . '">Prijslijst downloaden</a></li>';
+                echo '</ul>';
+            }
+        } else {
+            if ($errors !== []) {
+                echo '<div style="color:#b32d2e;">' . esc_html(implode(' ', $errors)) . '</div>';
+            }
+            echo '<form method="post">';
+            wp_nonce_field('bressol_b2b_signup');
+            echo '<p><label>Email *</label><br/><input type="email" name="email" required /></p>';
+            echo '<p><label>Type bedrijf</label><br/>' . $this->render_business_type_select('business_type') . '</p>';
+            echo '<p><label><input type="checkbox" name="consent" value="1" required> Ik geef toestemming om marketinginformatie van Bressol te ontvangen.</label></p>';
+            echo '<p><button type="submit" name="bressol_b2b_signup_submit">Aanmelden</button></p>';
+            echo '</form>';
+        }
+
+        echo '</div>';
+        if ($success) {
+            echo '<script>window.dataLayer = window.dataLayer || [];';
+            echo 'window.dataLayer.push({event:"b2b_signup_submitted", lead_id:' . (int) $leadId . ', source:"b2b"});</script>';
         }
         echo '</body></html>';
         exit;
@@ -241,6 +339,58 @@ final class Endpoints
         return 'bressol_b2b_consent_' . hash('sha256', $token);
     }
 
+    private function is_signup_throttled(string $emailLower): bool
+    {
+        if ($emailLower === '') {
+            return false;
+        }
+        $key = 'bressol_b2b_signup_' . hash('sha256', $emailLower . '|' . $this->client_ip());
+        return (bool) get_transient($key);
+    }
+
+    private function touch_signup_throttle(string $emailLower): void
+    {
+        $key = 'bressol_b2b_signup_' . hash('sha256', $emailLower . '|' . $this->client_ip());
+        set_transient($key, '1', self::SIGNUP_THROTTLE_SECONDS);
+    }
+
+
+    /** @param array<string, mixed> $input
+     *  @return array{email:string,business_type:string,consent:bool}
+     */
+    private function get_signup_payload(array $input): array
+    {
+        return [
+            'email' => isset($input['email']) ? sanitize_email((string) wp_unslash($input['email'])) : '',
+            'business_type' => isset($input['business_type']) ? sanitize_key((string) wp_unslash($input['business_type'])) : '',
+            'consent' => !empty($input['consent']),
+        ];
+    }
+
+
+    private function render_business_type_select(string $name): string
+    {
+        $options = [
+            '' => 'Kies een optie',
+            'gourmet' => 'Gourmet',
+            'horeca' => 'Horeca',
+            'corporate' => 'Corporate',
+            'other' => 'Other',
+        ];
+        $html = '<select name="' . esc_attr($name) . '">';
+        foreach ($options as $key => $label) {
+            $html .= '<option value="' . esc_attr($key) . '">' . esc_html($label) . '</option>';
+        }
+        $html .= '</select>';
+        return $html;
+    }
+
+    private function client_ip(): string
+    {
+        $ip = isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : '';
+        return preg_replace('/[^0-9a-fA-F:.,]/', '', $ip) ?? '';
+    }
+
     private function is_consent_submission(): bool
     {
         return $this->is_post_request() && isset($_POST['bressol_b2b_consent_submit']);
@@ -250,6 +400,17 @@ final class Endpoints
     {
         $nonce = isset($_POST['_wpnonce']) ? (string) wp_unslash($_POST['_wpnonce']) : '';
         return $nonce !== '' && wp_verify_nonce($nonce, 'bressol_b2b_consent');
+    }
+
+    private function is_signup_submission(): bool
+    {
+        return $this->is_post_request() && isset($_POST['bressol_b2b_signup_submit']);
+    }
+
+    private function verify_signup_nonce(): bool
+    {
+        $nonce = isset($_POST['_wpnonce']) ? (string) wp_unslash($_POST['_wpnonce']) : '';
+        return $nonce !== '' && wp_verify_nonce($nonce, 'bressol_b2b_signup');
     }
 
     private function is_post_request(): bool
