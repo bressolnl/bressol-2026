@@ -67,6 +67,7 @@ final class LeadService
         $data['email_lower'] = $emailLower;
         $data['company_name'] = isset($payload['company_name']) ? sanitize_text_field((string) $payload['company_name']) : ($data['company_name'] ?? null);
         $data['contact_name'] = isset($payload['contact_name']) ? sanitize_text_field((string) $payload['contact_name']) : ($data['contact_name'] ?? null);
+        $data['city'] = isset($payload['city']) ? sanitize_text_field((string) $payload['city']) : ($data['city'] ?? null);
         $data['phone'] = isset($payload['phone']) ? sanitize_text_field((string) $payload['phone']) : ($data['phone'] ?? null);
         $data['business_type'] = isset($payload['business_type']) ? $this->sanitize_business_type((string) $payload['business_type']) : ($data['business_type'] ?? null);
         $data['tier'] = isset($payload['tier']) ? $this->sanitize_tier((string) $payload['tier']) : ($data['tier'] ?? $this->default_tier());
@@ -204,6 +205,64 @@ final class LeadService
 
         $this->apply_consent_with_task($leadId, 'follow_up', 'Follow-up', 48);
         return $result;
+    }
+
+    /** @param array<string, mixed> $payload */
+    public function complete_profile(int $leadId, array $payload, bool $sendEmail = true): bool
+    {
+        if ($leadId <= 0) {
+            return false;
+        }
+
+        $lead = $this->leads->find_by_id($leadId);
+        if (!$lead) {
+            return false;
+        }
+
+        $beforeComplete = $this->is_profile_complete($lead);
+        $data = [
+            'company_name' => isset($payload['company_name']) ? sanitize_text_field((string) $payload['company_name']) : ($lead['company_name'] ?? null),
+            'city' => isset($payload['city']) ? sanitize_text_field((string) $payload['city']) : ($lead['city'] ?? null),
+            'phone' => isset($payload['phone']) ? sanitize_text_field((string) $payload['phone']) : ($lead['phone'] ?? null),
+            'updated_at' => current_time('mysql'),
+            'last_activity_at' => current_time('mysql'),
+        ];
+
+        $updated = $this->leads->update($leadId, $data);
+        if (!$updated) {
+            return false;
+        }
+
+        $lead = $this->leads->find_by_id($leadId);
+        if (!$lead) {
+            return false;
+        }
+
+        $afterComplete = $this->is_profile_complete($lead);
+        if (!$beforeComplete && $afterComplete) {
+            $this->events->insert_event($leadId, 'profile_completed', []);
+            $this->tasks->create_auto_task($leadId, 'hot_call', 'HOT lead - call', 24);
+
+            if ($sendEmail) {
+                $espRecentlyQueued = $this->events->has_recent_event($leadId, 'profile_email_queued', 86400);
+                if (!$espRecentlyQueued) {
+                    $espSent = (new EspService())->enqueue_b2b_profile_confirmation_email($lead);
+                    if ($espSent) {
+                        $this->events->insert_event($leadId, 'profile_email_queued', []);
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /** @param array<string, mixed> $lead */
+    public function is_profile_complete(array $lead): bool
+    {
+        $company = trim((string) ($lead['company_name'] ?? ''));
+        $city = trim((string) ($lead['city'] ?? ''));
+        return $company !== '' && $city !== '';
     }
 
 

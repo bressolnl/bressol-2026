@@ -102,6 +102,53 @@ final class EspService
         return true;
     }
 
+    public function enqueue_b2b_profile_confirmation_email(array $lead): bool
+    {
+        $leadId = (int) ($lead['id'] ?? 0);
+        $email = (string) ($lead['email'] ?? '');
+        $token = (string) ($lead['consent_token'] ?? '');
+        if ($leadId <= 0 || $email === '' || !is_email($email) || $token === '') {
+            return false;
+        }
+
+        global $wpdb;
+        $listsTable = $wpdb->prefix . 'bressol_esp_lists';
+        $membersTable = $wpdb->prefix . 'bressol_esp_list_members';
+        $campaignsTable = $wpdb->prefix . 'bressol_esp_campaigns';
+
+        $now = current_time('mysql');
+        $listId = $this->ensure_list_member($leadId, $email, $now, $listsTable, $membersTable);
+        if ($listId <= 0) {
+            return false;
+        }
+
+        $subject = 'Bressol B2B: bedankt voor je gegevens';
+        $body = $this->build_email_body_profile_confirmation($token);
+
+        $wpdb->insert(
+            $campaignsTable,
+            [
+                'name' => 'B2B Profile ' . $leadId . ' ' . $now,
+                'subject' => $subject,
+                'html_body' => $body,
+                'list_id' => $listId,
+                'status' => 'scheduled',
+                'scheduled_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            ['%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s']
+        );
+
+        $campaignId = (int) $wpdb->insert_id;
+        if ($campaignId <= 0) {
+            return false;
+        }
+
+        (new QueueService())->enqueue_campaign($campaignId);
+        return true;
+    }
+
 
     private function build_email_body(string $token): string
     {
@@ -127,6 +174,23 @@ final class EspService
 
         $html = '';
         $html .= '<p>We wilden je even herinneren aan onze B2B catalogus en prijslijst.</p>';
+        $html .= '<ul>';
+        $html .= '<li><a href="' . esc_url($catalogUrl) . '">Catalogus downloaden</a></li>';
+        $html .= '<li><a href="' . esc_url($pricelistUrl) . '">Prijslijst downloaden</a></li>';
+        $html .= '</ul>';
+        $html .= '<p>Met vriendelijke groet,<br/>Bressol</p>';
+
+        return $html;
+    }
+
+    private function build_email_body_profile_confirmation(string $token): string
+    {
+        $catalogUrl = add_query_arg(['token' => $token], home_url('/b2b/catalog'));
+        $pricelistUrl = add_query_arg(['token' => $token], home_url('/b2b/pricelist'));
+
+        $html = '';
+        $html .= '<p>Bedankt voor het aanvullen van je bedrijfsgegevens.</p>';
+        $html .= '<p>Hier zijn opnieuw de links naar de catalogus en prijslijst:</p>';
         $html .= '<ul>';
         $html .= '<li><a href="' . esc_url($catalogUrl) . '">Catalogus downloaden</a></li>';
         $html .= '<li><a href="' . esc_url($pricelistUrl) . '">Prijslijst downloaden</a></li>';

@@ -174,6 +174,7 @@ final class AdminPages
             'email' => '',
             'company_name' => '',
             'contact_name' => '',
+            'city' => '',
             'phone' => '',
             'business_type' => '',
             'tier' => $this->default_tier(),
@@ -200,6 +201,7 @@ final class AdminPages
         echo $this->render_text_row('Email', 'email', (string) ($lead['email'] ?? ''), true);
         echo $this->render_text_row('Empresa', 'company_name', (string) ($lead['company_name'] ?? ''), false);
         echo $this->render_text_row('Contacto', 'contact_name', (string) ($lead['contact_name'] ?? ''), false);
+        echo $this->render_text_row('Ciudad', 'city', (string) ($lead['city'] ?? ''), false);
         echo $this->render_text_row('Teléfono', 'phone', (string) ($lead['phone'] ?? ''), false);
         echo $this->render_select_row('Business type', 'business_type', (string) ($lead['business_type'] ?? ''), $this->business_type_options());
         echo $this->render_select_row('Tier', 'tier', (string) ($lead['tier'] ?? ''), $this->get_tier_options());
@@ -436,6 +438,7 @@ final class AdminPages
             'email' => isset($input['email']) ? sanitize_email((string) wp_unslash($input['email'])) : '',
             'company_name' => isset($input['company_name']) ? sanitize_text_field((string) wp_unslash($input['company_name'])) : '',
             'contact_name' => isset($input['contact_name']) ? sanitize_text_field((string) wp_unslash($input['contact_name'])) : '',
+            'city' => isset($input['city']) ? sanitize_text_field((string) wp_unslash($input['city'])) : '',
             'phone' => isset($input['phone']) ? sanitize_text_field((string) wp_unslash($input['phone'])) : '',
             'business_type' => isset($input['business_type']) ? sanitize_key((string) wp_unslash($input['business_type'])) : '',
             'tier' => isset($input['tier']) ? sanitize_key((string) wp_unslash($input['tier'])) : '',

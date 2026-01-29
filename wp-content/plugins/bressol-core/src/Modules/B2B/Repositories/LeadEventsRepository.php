@@ -87,6 +87,24 @@ final class LeadEventsRepository
         return $this->has_recent_event($leadId, $type, $minutes * 60);
     }
 
+    public function has_event(int $leadId, string $type): bool
+    {
+        if ($leadId <= 0 || $type === '') {
+            return false;
+        }
+
+        global $wpdb;
+        $count = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$this->table()} WHERE lead_id = %d AND type = %s",
+                $leadId,
+                $type
+            )
+        );
+
+        return is_numeric($count) && (int) $count > 0;
+    }
+
 
     private function table(): string
     {

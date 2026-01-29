@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bressol\Modules\B2B\Frontend;
 
+use Bressol\Modules\B2B\Repositories\LeadEventsRepository;
 use Bressol\Modules\B2B\Repositories\LeadRepository;
 use Bressol\Modules\B2B\Services\LeadService;
 
@@ -15,14 +16,17 @@ final class Endpoints
     private const TOKEN_REGEX = '/^[a-f0-9]{64}$/';
     private const CONSENT_THROTTLE_SECONDS = 60;
     private const SIGNUP_THROTTLE_SECONDS = 60;
+    private const PROFILE_THROTTLE_SECONDS = 60;
     private const GENERIC_ERROR = 'Deze link is ongeldig of verlopen.';
 
     private LeadRepository $leads;
+    private LeadEventsRepository $events;
     private LeadService $leadService;
 
     public function __construct()
     {
         $this->leads = new LeadRepository();
+        $this->events = new LeadEventsRepository();
         $this->leadService = new LeadService();
     }
 
@@ -89,12 +93,57 @@ final class Endpoints
         }
 
         $download = isset($_GET['download']) ? sanitize_key((string) wp_unslash($_GET['download'])) : '';
-        if ($this->is_get_request() && $download === '1' && $consented) {
+        $attemptDownload = $this->is_get_request() && $download === '1';
+
+        $profileJustCompleted = false;
+        $profileErrors = [];
+        if ($page === 'pricelist' && $consented && $this->is_profile_submission()) {
+            if (!$this->verify_profile_nonce()) {
+                $this->render_error(self::GENERIC_ERROR);
+                return;
+            }
+            if ($this->is_profile_throttled((int) $lead['id'])) {
+                $this->render_error('Probeer later opnieuw.');
+                return;
+            }
+            $this->touch_profile_throttle((int) $lead['id']);
+            $payload = $this->get_profile_payload($_POST);
+            if ($payload['company_name'] === '' || $payload['city'] === '') {
+                $profileErrors[] = 'Vul de verplichte velden in.';
+            } else {
+                $profileJustCompleted = $this->leadService->complete_profile((int) $lead['id'], $payload, true);
+                if (!$profileJustCompleted) {
+                    $profileErrors[] = 'Er ging iets mis. Probeer opnieuw.';
+                }
+                $lead = $this->leads->find_by_id((int) $lead['id']) ?? $lead;
+            }
+        }
+
+        $shouldPromptProfile = $page === 'pricelist'
+            && $consented
+            && !$this->leadService->is_profile_complete($lead)
+            && ($attemptDownload || $this->events->has_event((int) $lead['id'], 'pricelist_clicked'));
+
+        if ($attemptDownload && $consented && !$shouldPromptProfile) {
             $this->handle_download($page, (int) $lead['id']);
             return;
         }
 
-        $this->render_page($page, $token, $consented, $consentJustGiven, (int) $lead['id']);
+        if ($attemptDownload && $page === 'pricelist' && $consented && $shouldPromptProfile) {
+            $this->leadService->register_pricelist_click((int) $lead['id']);
+        }
+
+        $this->render_page(
+            $page,
+            $token,
+            $consented,
+            $consentJustGiven,
+            (int) $lead['id'],
+            $shouldPromptProfile,
+            $profileJustCompleted,
+            $lead,
+            $profileErrors
+        );
     }
 
     private function handle_download(string $page, int $leadId): void
@@ -127,7 +176,18 @@ final class Endpoints
         exit;
     }
 
-    private function render_page(string $page, string $token, bool $consented, bool $consentJustGiven, int $leadId): void
+    /** @param array<string, mixed> $lead */
+    private function render_page(
+        string $page,
+        string $token,
+        bool $consented,
+        bool $consentJustGiven,
+        int $leadId,
+        bool $showProfileForm,
+        bool $profileJustCompleted,
+        array $lead,
+        array $profileErrors
+    ): void
     {
         status_header(200);
         nocache_headers();
@@ -154,6 +214,28 @@ final class Endpoints
 
         if ($consentJustGiven) {
             echo '<p><strong>Bedankt! We hebben je toestemming geregistreerd.</strong></p>';
+        }
+        if ($profileJustCompleted) {
+            echo '<p><strong>Bedankt! We hebben je gegevens bijgewerkt.</strong></p>';
+        }
+
+        if ($showProfileForm) {
+            echo '<hr style="margin:24px 0;" />';
+            echo '<h2>Bedrijfsgegevens aanvullen</h2>';
+            echo '<p>Om je aanvraag beter te verwerken vragen we nog een paar gegevens.</p>';
+            if ($profileErrors !== []) {
+                echo '<div style="color:#b32d2e;">' . esc_html(implode(' ', $profileErrors)) . '</div>';
+            }
+            echo '<form method="post">';
+            wp_nonce_field('bressol_b2b_profile');
+            echo '<p><label>Bedrijf *</label><br/><input type="text" name="company_name" required value="'
+                . esc_attr((string) ($lead['company_name'] ?? '')) . '" /></p>';
+            echo '<p><label>Stad / locatie *</label><br/><input type="text" name="city" required value="'
+                . esc_attr((string) ($lead['city'] ?? '')) . '" /></p>';
+            echo '<p><label>Telefoon</label><br/><input type="text" name="phone" value="'
+                . esc_attr((string) ($lead['phone'] ?? '')) . '" /></p>';
+            echo '<p><button type="submit" name="bressol_b2b_profile_submit">Opslaan</button></p>';
+            echo '</form>';
         }
         echo '</div>';
         echo '<script>
@@ -354,6 +436,24 @@ final class Endpoints
         set_transient($key, '1', self::SIGNUP_THROTTLE_SECONDS);
     }
 
+    private function is_profile_throttled(int $leadId): bool
+    {
+        if ($leadId <= 0) {
+            return false;
+        }
+        $key = 'bressol_b2b_profile_' . $leadId;
+        return (bool) get_transient($key);
+    }
+
+    private function touch_profile_throttle(int $leadId): void
+    {
+        if ($leadId <= 0) {
+            return;
+        }
+        $key = 'bressol_b2b_profile_' . $leadId;
+        set_transient($key, '1', self::PROFILE_THROTTLE_SECONDS);
+    }
+
 
     /** @param array<string, mixed> $input
      *  @return array{email:string,business_type:string,consent:bool}
@@ -364,6 +464,18 @@ final class Endpoints
             'email' => isset($input['email']) ? sanitize_email((string) wp_unslash($input['email'])) : '',
             'business_type' => isset($input['business_type']) ? sanitize_key((string) wp_unslash($input['business_type'])) : '',
             'consent' => !empty($input['consent']),
+        ];
+    }
+
+    /** @param array<string, mixed> $input
+     *  @return array{company_name:string,city:string,phone:string}
+     */
+    private function get_profile_payload(array $input): array
+    {
+        return [
+            'company_name' => isset($input['company_name']) ? sanitize_text_field((string) wp_unslash($input['company_name'])) : '',
+            'city' => isset($input['city']) ? sanitize_text_field((string) wp_unslash($input['city'])) : '',
+            'phone' => isset($input['phone']) ? sanitize_text_field((string) wp_unslash($input['phone'])) : '',
         ];
     }
 
@@ -411,6 +523,17 @@ final class Endpoints
     {
         $nonce = isset($_POST['_wpnonce']) ? (string) wp_unslash($_POST['_wpnonce']) : '';
         return $nonce !== '' && wp_verify_nonce($nonce, 'bressol_b2b_signup');
+    }
+
+    private function is_profile_submission(): bool
+    {
+        return $this->is_post_request() && isset($_POST['bressol_b2b_profile_submit']);
+    }
+
+    private function verify_profile_nonce(): bool
+    {
+        $nonce = isset($_POST['_wpnonce']) ? (string) wp_unslash($_POST['_wpnonce']) : '';
+        return $nonce !== '' && wp_verify_nonce($nonce, 'bressol_b2b_profile');
     }
 
     private function is_post_request(): bool

@@ -19,6 +19,7 @@ final class LeadRepository
         'email_lower',
         'company_name',
         'contact_name',
+        'city',
         'phone',
         'business_type',
         'tier',
@@ -45,6 +46,7 @@ final class LeadRepository
         'email_lower' => '%s',
         'company_name' => '%s',
         'contact_name' => '%s',
+        'city' => '%s',
         'phone' => '%s',
         'business_type' => '%s',
         'tier' => '%s',
@@ -275,6 +277,7 @@ final class LeadRepository
         $nullable = [
             'company_name',
             'contact_name',
+            'city',
             'phone',
             'business_type',
             'source_ref_event_id',
