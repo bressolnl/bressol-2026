@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 
 final class Installer
 {
-    public const VERSION = '0.1.3';
+    public const VERSION = '0.1.4';
     private const VERSION_OPTION = 'bressol_b2b_schema_version';
 
     public static function maybe_upgrade(): void
@@ -59,6 +59,7 @@ final class Installer
             consent_token_created_at DATETIME NOT NULL,
             consent_token_expires_at DATETIME NOT NULL,
             consented_at DATETIME NULL,
+            reminder_sent_at DATETIME NULL,
             PRIMARY KEY (id),
             UNIQUE KEY email_lower (email_lower),
             UNIQUE KEY consent_token (consent_token),

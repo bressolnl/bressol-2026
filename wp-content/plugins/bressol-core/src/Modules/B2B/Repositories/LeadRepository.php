@@ -34,6 +34,7 @@ final class LeadRepository
         'consent_token_created_at',
         'consent_token_expires_at',
         'consented_at',
+        'reminder_sent_at',
     ];
 
     /** @var array<string, string> */
@@ -59,6 +60,7 @@ final class LeadRepository
         'consent_token_created_at' => '%s',
         'consent_token_expires_at' => '%s',
         'consented_at' => '%s',
+        'reminder_sent_at' => '%s',
     ];
 
     public function find_by_id(int $id): ?array
@@ -201,6 +203,37 @@ final class LeadRepository
         return is_numeric($count) ? (int) $count : 0;
     }
 
+    /** @return array<int, array<string, mixed>> */
+    public function find_for_reminder(string $cutoff, int $limit = 50): array
+    {
+        if ($cutoff === '') {
+            return [];
+        }
+
+        global $wpdb;
+        $table = $this->table();
+        $eventsTable = $wpdb->prefix . 'bressol_b2b_lead_events';
+        $limit = max(1, $limit);
+
+        $sql = "SELECT l.* FROM {$table} l
+            WHERE l.status = %s
+              AND l.consented_at IS NOT NULL
+              AND l.consented_at <= %s
+              AND l.reminder_sent_at IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM {$eventsTable} e
+                WHERE e.lead_id = l.id
+                  AND e.type IN (%s, %s)
+              )
+            ORDER BY l.consented_at ASC
+            LIMIT %d";
+
+        $prepared = $wpdb->prepare($sql, 'CONSENTED', $cutoff, 'catalog_clicked', 'pricelist_clicked', $limit);
+        $rows = $wpdb->get_results($prepared, ARRAY_A);
+
+        return is_array($rows) ? $rows : [];
+    }
+
     private function table(): string
     {
         global $wpdb;
@@ -248,6 +281,7 @@ final class LeadRepository
             'interests_json',
             'last_activity_at',
             'consented_at',
+            'reminder_sent_at',
         ];
 
         foreach ($nullable as $key) {

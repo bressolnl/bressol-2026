@@ -7,6 +7,7 @@ use Bressol\Core\ModuleInterface;
 use Bressol\Modules\B2B\Admin\AdminPages;
 use Bressol\Modules\B2B\Frontend\Endpoints;
 use Bressol\Modules\B2B\Services\Capabilities;
+use Bressol\Modules\B2B\Services\ReminderService;
 use Bressol\Modules\B2B\Services\Settings;
 
 if (!defined('ABSPATH')) {
@@ -26,6 +27,10 @@ final class B2BModule implements ModuleInterface
         add_filter('query_vars', [$endpoints, 'register_query_vars']);
         add_action('template_redirect', [$endpoints, 'handle_request']);
         add_action('admin_init', [$endpoints, 'maybe_flush_rewrite']);
+
+        $reminders = new ReminderService();
+        add_action('init', [$reminders, 'schedule']);
+        add_action(ReminderService::CRON_HOOK, [$reminders, 'run']);
 
         if (is_admin()) {
             $adminPages = new AdminPages();
