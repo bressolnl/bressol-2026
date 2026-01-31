@@ -24,6 +24,12 @@ Pantalla: `Bressol Tools` -> `Import Products (CSV)`.
 El reporte se guarda en `wp-content/uploads/bressol-import/` con columnas:
 `row, sku, action, status, message`.
 
+## Columnas CSV
+- `is_alcohol`: `0|1`. Se guarda en `_bressol_is_alcohol` y en el atributo global `pa_alcohol` (yes/no o ja/nee).
+- `tax_class`: `standard|reduced|zero|none`.
+  - Mapea a slugs reales de Woo (`''`/standard, `reduced-rate`, `zero-rate`).
+  - Si viene vacío: packaging/accesorios => standard; si `is_alcohol=1` => standard; si no => reduced.
+
 ## Nota
 Las filas plantilla del CSV se ignoran automáticamente.
 Los valores `null` se normalizan a `''` (string vacío) antes de importar.

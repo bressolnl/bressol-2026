@@ -269,6 +269,9 @@ final class ProductsCsvImporter
             $errors[] = 'Título obligatorio.';
         }
 
+        $hasIsAlcohol = $this->has_column($headerMap, 'is_alcohol');
+        $isAlcohol = $hasIsAlcohol ? $this->normalize_flag($this->get_value($row, $headerMap, 'is_alcohol')) : null;
+
         $status = $this->s($this->get_value($row, $headerMap, 'status'));
         $status = $status !== '' ? sanitize_key($status) : 'publish';
         if ($status !== '' && !in_array($status, self::ALLOWED_STATUS, true)) {
@@ -294,6 +297,15 @@ final class ProductsCsvImporter
         $termErrors = $this->validate_terms($categories, 'product_cat', $strictTerms, $createMissingTerms, $dryRun);
         $termErrors = array_merge($termErrors, $this->validate_terms($tags, 'product_tag', false, $createMissingTerms, $dryRun));
         $errors = array_merge($errors, $termErrors);
+
+        $hasTaxClass = $this->has_column($headerMap, 'tax_class');
+        $taxClassDecision = $this->resolve_tax_class(
+            $this->s($this->get_value($row, $headerMap, 'tax_class')),
+            $categories,
+            $isAlcohol ?? 0,
+            $hasTaxClass,
+            $errors
+        );
 
         if ($errors !== []) {
             error_log(sprintf('ProductsCsvImporter: fila %d (SKU %s) omitida por validación.', $rowIndex, $sku));
@@ -350,7 +362,16 @@ final class ProductsCsvImporter
         }
 
         $this->apply_taxonomies($postId, $headerMap, $categories, $tags, $clearMissing);
-        $this->apply_core_meta($postId, $headerMap, $row, $sku, $clearMissing);
+        $this->apply_core_meta(
+            $postId,
+            $headerMap,
+            $row,
+            $sku,
+            $clearMissing,
+            $isAlcohol,
+            $hasIsAlcohol,
+            $taxClassDecision
+        );
         $this->apply_custom_meta($postId, $headerMap, $row, $faqRaw, $faqNormalized, $clearMissing);
 
         if (function_exists('wc_delete_product_transients')) {
@@ -374,9 +395,23 @@ final class ProductsCsvImporter
         }
     }
 
-    private function apply_core_meta(int $postId, array $headerMap, array $row, string $sku, bool $clearMissing): void
-    {
+    private function apply_core_meta(
+        int $postId,
+        array $headerMap,
+        array $row,
+        string $sku,
+        bool $clearMissing,
+        ?int $isAlcohol,
+        bool $hasIsAlcohol,
+        ?array $taxClassDecision
+    ): void {
         update_post_meta($postId, '_sku', $sku);
+
+        if ($hasIsAlcohol) {
+            $value = $isAlcohol ?? 0;
+            update_post_meta($postId, '_bressol_is_alcohol', $value);
+            $this->apply_alcohol_attribute($postId, $value);
+        }
 
         $regularKey = $this->has_column($headerMap, '_regular_price') ? '_regular_price' : 'regular_price';
         $saleKey = $this->has_column($headerMap, '_sale_price') ? '_sale_price' : 'sale_price';
@@ -471,6 +506,7 @@ final class ProductsCsvImporter
         }
 
         $taxStatusKey = $this->has_column($headerMap, '_tax_status') ? '_tax_status' : 'tax_status';
+        $taxStatusRaw = '';
         if ($this->has_column($headerMap, $taxStatusKey)) {
             $taxStatusRaw = $this->get_value($row, $headerMap, $taxStatusKey);
             if ($taxStatusRaw !== '' || $clearMissing) {
@@ -481,11 +517,13 @@ final class ProductsCsvImporter
             }
         }
         $taxClassKey = $this->has_column($headerMap, '_tax_class') ? '_tax_class' : 'tax_class';
-        if ($this->has_column($headerMap, $taxClassKey)) {
-            $taxClassRaw = $this->get_value($row, $headerMap, $taxClassKey);
-            if ($taxClassRaw !== '' || $clearMissing) {
-                $taxClass = sanitize_key($taxClassRaw);
-                update_post_meta($postId, '_tax_class', $taxClass);
+        if ($taxClassDecision !== null) {
+            update_post_meta($postId, '_tax_class', $taxClassDecision['class']);
+            if (
+                $taxClassDecision['status'] !== null
+                && ($taxStatusRaw === '' || !$this->has_column($headerMap, $taxStatusKey))
+            ) {
+                update_post_meta($postId, '_tax_status', $taxClassDecision['status']);
             }
         }
     }
@@ -742,6 +780,155 @@ final class ProductsCsvImporter
     {
         $value = strtolower(trim($value));
         return in_array($value, ['1', 'yes', 'true', 'on'], true) ? 'yes' : 'no';
+    }
+
+    private function normalize_flag(string $value): int
+    {
+        $value = strtolower(trim($value));
+        return in_array($value, ['1', 'yes', 'true', 'on'], true) ? 1 : 0;
+    }
+
+    private function resolve_tax_class(
+        string $value,
+        array $categories,
+        int $isAlcohol,
+        bool $hasTaxClass,
+        array &$errors
+    ): ?array {
+        if (!$hasTaxClass) {
+            return null;
+        }
+
+        $normalized = strtolower(trim($value));
+        if ($normalized === '') {
+            return [
+                'class' => $this->default_tax_class($categories, $isAlcohol),
+                'status' => null,
+            ];
+        }
+
+        $normalized = str_replace(' ', '-', $normalized);
+        if (in_array($normalized, ['standard', 'standard-rate'], true)) {
+            return ['class' => '', 'status' => null];
+        }
+        if (in_array($normalized, ['reduced', 'reduced-rate'], true)) {
+            return ['class' => 'reduced-rate', 'status' => null];
+        }
+        if (in_array($normalized, ['zero', 'zero-rate'], true)) {
+            return ['class' => 'zero-rate', 'status' => null];
+        }
+        if ($normalized === 'none') {
+            return ['class' => '', 'status' => 'none'];
+        }
+
+        $errors[] = 'tax_class inválido: ' . $normalized;
+        return null;
+    }
+
+    private function default_tax_class(array $categories, int $isAlcohol): string
+    {
+        if ($this->has_packaging_category($categories)) {
+            return '';
+        }
+        if ($isAlcohol === 1) {
+            return '';
+        }
+        return 'reduced-rate';
+    }
+
+    private function has_packaging_category(array $categories): bool
+    {
+        $markers = ['packaging', 'accessory', 'accessories', 'accesorio', 'accesorios'];
+        foreach ($categories as $slug) {
+            foreach ($markers as $marker) {
+                if (strpos($slug, $marker) !== false) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private function apply_alcohol_attribute(int $postId, int $isAlcohol): void
+    {
+        $taxonomy = 'pa_alcohol';
+        if (!taxonomy_exists($taxonomy)) {
+            return;
+        }
+
+        $terms = $this->resolve_alcohol_terms($taxonomy);
+        if ($terms === []) {
+            return;
+        }
+
+        $termSlug = $isAlcohol === 1 ? $terms['yes'] : $terms['no'];
+        if ($termSlug === '') {
+            return;
+        }
+
+        wp_set_object_terms($postId, [$termSlug], $taxonomy, false);
+        $this->ensure_product_attribute_meta($postId, $taxonomy);
+    }
+
+    private function resolve_alcohol_terms(string $taxonomy): array
+    {
+        $hasJa = term_exists('ja', $taxonomy);
+        $hasNee = term_exists('nee', $taxonomy);
+        if ($hasJa && $hasNee) {
+            return ['yes' => 'ja', 'no' => 'nee'];
+        }
+
+        $hasYes = term_exists('yes', $taxonomy);
+        $hasNo = term_exists('no', $taxonomy);
+        if ($hasYes && $hasNo) {
+            return ['yes' => 'yes', 'no' => 'no'];
+        }
+
+        $createdYes = term_exists('yes', $taxonomy) ? 'yes' : '';
+        $createdNo = term_exists('no', $taxonomy) ? 'no' : '';
+        if ($createdYes === '') {
+            $created = wp_insert_term('Yes', $taxonomy, ['slug' => 'yes']);
+            if (!is_wp_error($created)) {
+                $createdYes = 'yes';
+            }
+        }
+        if ($createdNo === '') {
+            $created = wp_insert_term('No', $taxonomy, ['slug' => 'no']);
+            if (!is_wp_error($created)) {
+                $createdNo = 'no';
+            }
+        }
+
+        if ($createdYes !== '' && $createdNo !== '') {
+            return ['yes' => $createdYes, 'no' => $createdNo];
+        }
+        return [];
+    }
+
+    private function ensure_product_attribute_meta(int $postId, string $taxonomy): void
+    {
+        if (!function_exists('wc_get_product')) {
+            return;
+        }
+
+        $product = wc_get_product($postId);
+        if (!$product instanceof \WC_Product) {
+            return;
+        }
+
+        $attributes = $product->get_attributes();
+        if (isset($attributes[$taxonomy])) {
+            return;
+        }
+
+        $attribute = new \WC_Product_Attribute();
+        $attribute->set_id(wc_attribute_taxonomy_id_by_name($taxonomy));
+        $attribute->set_name($taxonomy);
+        $attribute->set_visible(true);
+        $attribute->set_variation(false);
+        $attributes[$taxonomy] = $attribute;
+        $product->set_attributes($attributes);
+        $product->save();
     }
 
     private function strip_bom(string $value): string
