@@ -243,7 +243,8 @@ final class ProductsCsvImporter
 
         $sku = sanitize_text_field($this->s($skuRaw));
         if ($sku === '') {
-            return $this->result($rowIndex, '', 'skip', 'error', 'SKU vacío.');
+            error_log(sprintf('ProductsCsvImporter: validación falla en fila %d (SKU vacío).', $rowIndex));
+            return $this->result($rowIndex, '', 'skip', 'error', 'SKU obligatorio.');
         }
 
         $mode = (string) ($options['mode'] ?? 'upsert');
@@ -263,9 +264,9 @@ final class ProductsCsvImporter
 
         $errors = [];
         $title = sanitize_text_field($this->s($this->get_value($row, $headerMap, 'title')));
-        if (!$exists && $title === '') {
-            error_log(sprintf('ProductsCsvImporter: título vacío en fila %d (SKU %s).', $rowIndex, $sku));
-            $errors[] = 'Título obligatorio para crear (columna title vacía).';
+        if ($title === '') {
+            error_log(sprintf('ProductsCsvImporter: validación falla en fila %d (SKU %s, título vacío).', $rowIndex, $sku));
+            $errors[] = 'Título obligatorio.';
         }
 
         $status = $this->s($this->get_value($row, $headerMap, 'status'));
@@ -295,6 +296,7 @@ final class ProductsCsvImporter
         $errors = array_merge($errors, $termErrors);
 
         if ($errors !== []) {
+            error_log(sprintf('ProductsCsvImporter: fila %d (SKU %s) omitida por validación.', $rowIndex, $sku));
             return $this->result($rowIndex, $sku, 'skip', 'error', implode(' ', $errors));
         }
 
@@ -304,19 +306,15 @@ final class ProductsCsvImporter
 
         $postId = $exists ? $productId : 0;
         if (!$exists) {
-            if ($title === '') {
-                error_log(sprintf('ProductsCsvImporter: abortando create sin título en fila %d (SKU %s).', $rowIndex, $sku));
-                return $this->result($rowIndex, $sku, 'create', 'error', 'Título obligatorio para crear (columna title vacía).');
-            }
-            $content = $this->get_post_content($row, $headerMap, $clearMissing);
-            $excerpt = $this->get_post_excerpt($row, $headerMap, $clearMissing);
+            $content = $this->get_post_content($row, $headerMap, $clearMissing) ?? '';
+            $excerpt = $this->get_post_excerpt($row, $headerMap, $clearMissing) ?? '';
             $postId = wp_insert_post([
                 'post_type' => 'product',
                 'post_status' => $status !== '' ? $status : 'publish',
                 'post_title' => $title,
                 'post_name' => $slug !== '' ? $slug : null,
-                'post_content' => $content !== null ? $content : '',
-                'post_excerpt' => $excerpt !== null ? $excerpt : '',
+                'post_content' => $content,
+                'post_excerpt' => $excerpt,
             ], true);
             if ($postId instanceof \WP_Error) {
                 return $this->result($rowIndex, $sku, 'create', 'error', $postId->get_error_message());
@@ -546,7 +544,7 @@ final class ProductsCsvImporter
             if (in_array($key, ['bressol_allergens', 'bressol_may_contain', 'bressol_pdp_faq'], true)) {
                 continue;
             }
-            $value = isset($row[$index]) ? (string) $row[$index] : '';
+            $value = isset($row[$index]) ? $this->s($row[$index]) : '';
             if ($value === '' && !$clearMissing) {
                 continue;
             }
@@ -605,7 +603,7 @@ final class ProductsCsvImporter
         ];
         $hits = 0;
         foreach ($row as $cell) {
-            $cellValue = strtolower(trim((string) $cell));
+            $cellValue = strtolower($this->s($cell));
             if ($cellValue === '') {
                 continue;
             }
