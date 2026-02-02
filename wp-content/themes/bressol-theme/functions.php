@@ -107,7 +107,39 @@ add_action('wp_enqueue_scripts', function () {
         );
     }
 
+    $home_scripts = [
+        'bressol-home-slider' => '/assets/js/home-slider.js',
+        'bressol-home-header' => '/assets/js/home-header.js',
+        'bressol-home-quick-add' => '/assets/js/home-quick-add.js',
+    ];
+
+    foreach ($home_scripts as $handle => $script_path) {
+        $path = get_stylesheet_directory() . $script_path;
+        if (!is_readable($path)) {
+            continue;
+        }
+        wp_enqueue_script(
+            $handle,
+            get_stylesheet_directory_uri() . $script_path,
+            [],
+            (string) filemtime($path),
+            true
+        );
+    }
+
 });
+
+add_filter('script_loader_tag', function (string $tag, string $handle, string $src): string {
+    $defer_handles = [
+        'bressol-home-slider',
+        'bressol-home-header',
+        'bressol-home-quick-add',
+    ];
+    if (!in_array($handle, $defer_handles, true)) {
+        return $tag;
+    }
+    return sprintf('<script src="%s" defer></script>', esc_url($src));
+}, 10, 3);
 
 add_action('wp', function () {
     if (!function_exists('is_tax') || !is_tax('bressol_moment')) {
