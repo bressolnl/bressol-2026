@@ -1,0 +1,31 @@
+@layer tokens, base, layout, components, sections;
+
+@layer tokens {
+    :root {
+        --bressol-ink: #070C0C;
+        --bressol-gold: #BCAF4A;
+        --bressol-ivory: #F6F2E8;
+        --bressol-ivory-2: #FBF9F2;
+        --bressol-ink-70: rgba(7, 12, 12, 0.7);
+        --bressol-ink-30: rgba(7, 12, 12, 0.3);
+        --bressol-ink-10: rgba(7, 12, 12, 0.1);
+
+        --bressol-font-serif: "Cinzel", serif;
+        --bressol-font-sans: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+
+        --bressol-container-max: 1180px;
+        --bressol-gutter: 24px;
+        --bressol-section-y: 80px;
+
+        --bressol-radius-sm: 8px;
+        --bressol-radius-md: 14px;
+        --bressol-radius-lg: 22px;
+
+        --bressol-shadow-sm: 0 8px 20px rgba(7, 12, 12, 0.08);
+        --bressol-shadow-md: 0 14px 30px rgba(7, 12, 12, 0.12);
+
+        --bressol-duration-fast: 160ms;
+        --bressol-duration-med: 280ms;
+        --bressol-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+}

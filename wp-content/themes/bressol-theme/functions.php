@@ -34,6 +34,79 @@ add_action('wp_enqueue_scripts', function () {
     $style_path = get_stylesheet_directory() . '/style.css';
     $style_version = is_readable($style_path) ? (string) filemtime($style_path) : '0.1.0';
     wp_enqueue_style('bressol-theme', get_stylesheet_uri(), [], $style_version);
+
+    if (!function_exists('is_front_page') || !is_front_page()) {
+        return;
+    }
+
+    $home_styles = [
+        'bressol-home-tokens' => [
+            'path' => '/assets/css/tokens.css',
+            'deps' => ['bressol-theme'],
+        ],
+        'bressol-home-base' => [
+            'path' => '/assets/css/base.css',
+            'deps' => ['bressol-home-tokens'],
+        ],
+        'bressol-home-layout' => [
+            'path' => '/assets/css/layout.css',
+            'deps' => ['bressol-home-base'],
+        ],
+        'bressol-home-components' => [
+            'path' => '/assets/css/components.css',
+            'deps' => ['bressol-home-layout'],
+        ],
+        'bressol-home-hero' => [
+            'path' => '/assets/css/sections/home-hero.css',
+            'deps' => ['bressol-home-components'],
+        ],
+        'bressol-home-trust' => [
+            'path' => '/assets/css/sections/home-trust.css',
+            'deps' => ['bressol-home-components'],
+        ],
+        'bressol-home-shortcuts' => [
+            'path' => '/assets/css/sections/home-shortcuts.css',
+            'deps' => ['bressol-home-components'],
+        ],
+        'bressol-home-bestsellers' => [
+            'path' => '/assets/css/sections/home-bestsellers.css',
+            'deps' => ['bressol-home-components'],
+        ],
+        'bressol-home-moments' => [
+            'path' => '/assets/css/sections/home-moments.css',
+            'deps' => ['bressol-home-components'],
+        ],
+        'bressol-home-editorials' => [
+            'path' => '/assets/css/sections/home-editorials.css',
+            'deps' => ['bressol-home-components'],
+        ],
+        'bressol-home-gifts' => [
+            'path' => '/assets/css/sections/home-gifts.css',
+            'deps' => ['bressol-home-components'],
+        ],
+        'bressol-home-origin' => [
+            'path' => '/assets/css/sections/home-origin.css',
+            'deps' => ['bressol-home-components'],
+        ],
+        'bressol-home-newsletter' => [
+            'path' => '/assets/css/sections/home-newsletter.css',
+            'deps' => ['bressol-home-components'],
+        ],
+    ];
+
+    foreach ($home_styles as $handle => $style) {
+        $path = get_stylesheet_directory() . $style['path'];
+        if (!is_readable($path)) {
+            continue;
+        }
+        wp_enqueue_style(
+            $handle,
+            get_stylesheet_directory_uri() . $style['path'],
+            $style['deps'],
+            (string) filemtime($path)
+        );
+    }
+
 });
 
 add_action('wp', function () {

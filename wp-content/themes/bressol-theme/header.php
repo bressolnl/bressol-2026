@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 <body <?php body_class(); ?>>
 <?php wp_body_open(); ?>
 <a class="bressol-skip-link" href="#main"><?php esc_html_e('Skip to content', 'bressol-theme'); ?></a>
-<header class="bressol-site-header">
+<header class="bressol-site-header bressol-site-header--transparent" data-bressol-header>
     <div class="bressol-site-header__inner bressol-container">
         <a class="bressol-brand" href="<?php echo esc_url(home_url('/')); ?>">
             <span class="bressol-brand__name">Bressol</span>

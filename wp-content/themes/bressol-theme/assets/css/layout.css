@@ -1,0 +1,38 @@
+@layer layout {
+    .bressol-home .bressol-container {
+        max-width: var(--bressol-container-max);
+        margin: 0 auto;
+        padding: 0 var(--bressol-gutter);
+    }
+
+    .bressol-home .bressol-section {
+        padding: var(--bressol-section-y) 0;
+    }
+
+    .bressol-home .bressol-section__header {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-bottom: 32px;
+    }
+
+    .bressol-home .bressol-section__title {
+        font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.4rem);
+        line-height: 1.15;
+    }
+
+    .bressol-home .bressol-section__lead {
+        max-width: 52ch;
+    }
+
+    .bressol-home .bressol-grid {
+        display: grid;
+        gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+        .bressol-home .bressol-section {
+            padding: 56px 0;
+        }
+    }
+}

@@ -1,0 +1,88 @@
+@layer components {
+    .bressol-site-header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: transparent;
+        transition: background var(--bressol-duration-med) var(--bressol-ease),
+            box-shadow var(--bressol-duration-med) var(--bressol-ease);
+    }
+
+    .bressol-site-header--solid {
+        background: var(--bressol-ivory);
+        box-shadow: var(--bressol-shadow-sm);
+    }
+
+    .bressol-home .bressol-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 20px;
+        border-radius: 999px;
+        border: 1px solid var(--bressol-gold);
+        background: var(--bressol-gold);
+        color: var(--bressol-ink);
+        font-weight: 600;
+        transition: transform var(--bressol-duration-fast) var(--bressol-ease),
+            box-shadow var(--bressol-duration-fast) var(--bressol-ease);
+    }
+
+    .bressol-home .bressol-button--ghost {
+        background: transparent;
+        color: var(--bressol-ink);
+    }
+
+    .bressol-home .bressol-button:hover,
+    .bressol-home .bressol-button:focus-visible {
+        transform: translateY(-1px);
+        box-shadow: var(--bressol-shadow-sm);
+    }
+
+    .bressol-home .bressol-media-placeholder {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, rgba(188, 175, 74, 0.2), rgba(7, 12, 12, 0.06));
+        border-radius: inherit;
+    }
+
+    .bressol-home .bressol-card {
+        padding: 24px;
+        border-radius: var(--bressol-radius-md);
+        border: 1px solid var(--bressol-ink-10);
+        background: var(--bressol-ivory-2);
+    }
+
+    .bressol-home .bressol-product-card {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 20px;
+        border-radius: var(--bressol-radius-md);
+        background: #fff;
+        border: 1px solid var(--bressol-ink-10);
+        box-shadow: var(--bressol-shadow-sm);
+    }
+
+    .bressol-home .bressol-product-card__media {
+        border-radius: var(--bressol-radius-sm);
+        background: rgba(7, 12, 12, 0.04);
+        overflow: hidden;
+    }
+
+    .bressol-home .bressol-product-card__quick-add {
+        width: 100%;
+        padding: 10px 16px;
+        border-radius: 999px;
+        border: 1px solid var(--bressol-ink-30);
+        background: transparent;
+        cursor: pointer;
+    }
+
+    .bressol-home .bressol-product-card__quick-add:hover,
+    .bressol-home .bressol-product-card__quick-add:focus-visible {
+        border-color: var(--bressol-gold);
+        color: var(--bressol-ink);
+    }
+}
