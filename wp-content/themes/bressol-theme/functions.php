@@ -7,6 +7,11 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+$home_data_path = get_stylesheet_directory() . '/inc/home-data.php';
+if (is_readable($home_data_path)) {
+    require_once $home_data_path;
+}
+
 add_action('after_setup_theme', function () {
     add_theme_support('title-tag');
     add_theme_support('post-thumbnails');
