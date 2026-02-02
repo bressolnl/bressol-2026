@@ -1,0 +1,23 @@
+@layer sections {
+    .bressol-home .bressol-editorials__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 24px;
+    }
+
+    .bressol-home .bressol-editorial-card {
+        display: grid;
+        gap: 12px;
+    }
+
+    .bressol-home .bressol-editorial-card__media {
+        border-radius: var(--bressol-radius-md);
+        overflow: hidden;
+        background: rgba(7, 12, 12, 0.04);
+    }
+
+    .bressol-home .bressol-editorial-card__cta {
+        font-weight: 600;
+        color: var(--bressol-gold);
+    }
+}

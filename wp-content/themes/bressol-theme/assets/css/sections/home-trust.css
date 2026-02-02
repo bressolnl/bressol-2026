@@ -1,0 +1,20 @@
+@layer sections {
+    .bressol-home .bressol-trust__list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 16px;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+        font-size: 0.95rem;
+        color: var(--bressol-ink-70);
+    }
+
+    .bressol-home .bressol-trust__item {
+        padding: 12px 16px;
+        border-radius: var(--bressol-radius-sm);
+        background: #fff;
+        border: 1px solid var(--bressol-ink-10);
+        text-align: center;
+    }
+}

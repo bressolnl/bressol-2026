@@ -1,0 +1,22 @@
+@layer sections {
+    .bressol-home .bressol-gifts__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 24px;
+    }
+
+    .bressol-home .bressol-gift-card {
+        display: grid;
+        gap: 12px;
+        padding: 18px;
+        border-radius: var(--bressol-radius-md);
+        border: 1px solid var(--bressol-ink-10);
+        background: #fff;
+    }
+
+    .bressol-home .bressol-gift-card__media {
+        border-radius: var(--bressol-radius-sm);
+        overflow: hidden;
+        background: rgba(7, 12, 12, 0.04);
+    }
+}

@@ -1,0 +1,26 @@
+@layer sections {
+    .bressol-home .bressol-shortcuts__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+    }
+
+    .bressol-home .bressol-shortcut-card {
+        padding: 24px;
+        border-radius: var(--bressol-radius-md);
+        background: #fff;
+        border: 1px solid var(--bressol-ink-10);
+        display: grid;
+        gap: 12px;
+        min-height: 180px;
+    }
+
+    .bressol-home .bressol-shortcut-card__title {
+        font-size: 1.25rem;
+    }
+
+    .bressol-home .bressol-shortcut-card__cta {
+        font-weight: 600;
+        color: var(--bressol-gold);
+    }
+}

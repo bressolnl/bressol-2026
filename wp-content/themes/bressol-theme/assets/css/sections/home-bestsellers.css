@@ -1,0 +1,16 @@
+@layer sections {
+    .bressol-home .bressol-bestsellers__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 24px;
+    }
+
+    .bressol-home .bressol-product-card__title {
+        font-size: 1.1rem;
+    }
+
+    .bressol-home .bressol-product-card__price {
+        font-weight: 600;
+        color: var(--bressol-ink);
+    }
+}

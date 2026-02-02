@@ -1,0 +1,111 @@
+@layer sections {
+    .bressol-home .bressol-hero {
+        background: var(--bressol-ivory-2);
+    }
+
+    .bressol-home .bressol-hero__inner {
+        display: grid;
+        gap: 32px;
+    }
+
+    .bressol-home .bressol-hero__slide {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        gap: 20px;
+        align-items: center;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--bressol-duration-med) var(--bressol-ease);
+    }
+
+    .bressol-home .bressol-hero__slide:first-child {
+        position: relative;
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .bressol-home .bressol-hero__slide.bressol-is-active {
+        position: relative;
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .bressol-home .bressol-hero__title {
+        font-size: clamp(2.1rem, 1.4rem + 2.5vw, 3.4rem);
+        line-height: 1.1;
+        color: var(--bressol-ink);
+    }
+
+    .bressol-home .bressol-hero__copy {
+        font-size: 1.05rem;
+        max-width: 48ch;
+    }
+
+    .bressol-home .bressol-hero__cta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .bressol-home .bressol-hero__media {
+        border-radius: var(--bressol-radius-lg);
+        background: rgba(7, 12, 12, 0.04);
+        overflow: hidden;
+        min-height: 240px;
+    }
+
+    .bressol-home .bressol-hero__controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 16px;
+    }
+
+    .bressol-home .bressol-hero__counter {
+        font-family: var(--bressol-font-serif);
+        letter-spacing: 0.1em;
+        color: var(--bressol-ink-70);
+    }
+
+    .bressol-home .bressol-hero__dots {
+        display: flex;
+        gap: 8px;
+    }
+
+    .bressol-home .bressol-hero__dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        border: 1px solid var(--bressol-ink-30);
+        background: transparent;
+        cursor: pointer;
+    }
+
+    .bressol-home .bressol-hero__content {
+        position: relative;
+        min-height: 420px;
+    }
+
+    .bressol-home .bressol-hero__dot.bressol-is-active {
+        background: var(--bressol-gold);
+        border-color: var(--bressol-gold);
+    }
+
+    @media (min-width: 900px) {
+        .bressol-home .bressol-hero__slide {
+            grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+        }
+
+        .bressol-home .bressol-hero__content {
+            min-height: 520px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .bressol-home .bressol-hero__slide {
+            transition: none;
+        }
+    }
+}

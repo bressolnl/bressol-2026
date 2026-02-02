@@ -1,0 +1,31 @@
+@layer sections {
+    .bressol-home .bressol-newsletter {
+        background: #fff;
+    }
+
+    .bressol-home .bressol-newsletter__content {
+        margin-bottom: 20px;
+    }
+
+    .bressol-home .bressol-newsletter__form {
+        display: grid;
+        gap: 12px;
+    }
+
+    .bressol-home .bressol-newsletter__fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .bressol-home .bressol-newsletter__input {
+        flex: 1 1 220px;
+        padding: 12px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--bressol-ink-10);
+    }
+
+    .bressol-home .bressol-newsletter__privacy {
+        font-size: 0.85rem;
+    }
+}

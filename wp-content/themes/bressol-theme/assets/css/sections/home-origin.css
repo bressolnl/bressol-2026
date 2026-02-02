@@ -1,0 +1,16 @@
+@layer sections {
+    .bressol-home .bressol-origin__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+    }
+
+    .bressol-home .bressol-origin-card {
+        padding: 22px;
+        border-radius: var(--bressol-radius-md);
+        border: 1px solid var(--bressol-ink-10);
+        background: var(--bressol-ivory-2);
+        display: grid;
+        gap: 10px;
+    }
+}

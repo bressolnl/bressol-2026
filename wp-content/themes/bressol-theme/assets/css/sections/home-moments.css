@@ -1,0 +1,20 @@
+@layer sections {
+    .bressol-home .bressol-moments__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 18px;
+    }
+
+    .bressol-home .bressol-moment-card {
+        padding: 20px;
+        border-radius: var(--bressol-radius-sm);
+        border: 1px solid var(--bressol-ink-10);
+        background: #fff;
+        display: grid;
+        gap: 10px;
+    }
+
+    .bressol-home .bressol-moment-card__title {
+        font-size: 1.1rem;
+    }
+}
