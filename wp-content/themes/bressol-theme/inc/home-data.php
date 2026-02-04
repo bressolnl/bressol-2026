@@ -11,42 +11,42 @@ if (!function_exists('bressol_get_home_data')) {
                 [
                     'title' => 'Valenciaanse smaken, rustig gekozen.',
                     'copy' => 'Bressol selecteert delicatessen met ambachtelijke herkomst en een sobere, mediterrane stijl.',
-                    'image_id' => 0,
-                    'image_ratio' => '16 / 9',
+                    'desktop_image' => '/assets/img/hero/hero-borrel-desktop.svg',
+                    'mobile_image' => '/assets/img/hero/hero-borrel-mobile.svg',
                     'primary_cta' => [
                         'label' => 'Ontdek de selectie',
                         'url' => '#',
                     ],
                     'secondary_cta' => [
-                        'label' => 'Start met advies',
+                        'label' => 'Shop borrel & dranken',
                         'url' => '#',
                     ],
                 ],
                 [
                     'title' => 'Voor tafel, borrel en cadeau.',
                     'copy' => 'Samenstellingen met balans, klaar om te schenken of te delen.',
-                    'image_id' => 0,
-                    'image_ratio' => '16 / 9',
+                    'desktop_image' => '/assets/img/hero/hero-chef-desktop.svg',
+                    'mobile_image' => '/assets/img/hero/hero-chef-mobile.svg',
                     'primary_cta' => [
                         'label' => 'Bekijk pakketten',
                         'url' => '#',
                     ],
                     'secondary_cta' => [
-                        'label' => 'Zo werkt het',
+                        'label' => 'Shop kook zoals een chef',
                         'url' => '#',
                     ],
                 ],
                 [
                     'title' => 'Herkomst met karakter.',
                     'copy' => 'Kleine makers uit Valencia, gekozen op continuiteit en vakmanschap.',
-                    'image_id' => 0,
-                    'image_ratio' => '16 / 9',
+                    'desktop_image' => '/assets/img/hero/hero-dolcet-desktop.svg',
+                    'mobile_image' => '/assets/img/hero/hero-dolcet-mobile.svg',
                     'primary_cta' => [
                         'label' => 'Lees meer',
                         'url' => '#',
                     ],
                     'secondary_cta' => [
-                        'label' => 'Onze momenten',
+                        'label' => 'Shop el dolçet per al cafè',
                         'url' => '#',
                     ],
                 ],

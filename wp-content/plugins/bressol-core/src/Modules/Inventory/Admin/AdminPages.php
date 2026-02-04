@@ -33,6 +33,33 @@ final class AdminPages
             'bressol-inventory',
             [$this, 'renderInventoryPage']
         );
+
+        add_submenu_page(
+            'bressol-inventory',
+            'Lots',
+            'Lots',
+            'manage_options',
+            'bressol-lots',
+            [$this, 'renderLotsPage']
+        );
+
+        add_submenu_page(
+            'bressol-inventory',
+            'Transfers',
+            'Transfers',
+            'manage_options',
+            'bressol-transfers',
+            [$this, 'renderTransfersPage']
+        );
+
+        add_submenu_page(
+            'bressol-inventory',
+            'Expiry Alerts',
+            'Expiry Alerts',
+            'manage_options',
+            'bressol-expiry-alerts',
+            [$this, 'renderExpiryAlertsPage']
+        );
     }
 
     public function renderInventoryPage(): void
@@ -91,5 +118,20 @@ final class AdminPages
 
         echo '</tbody></table>';
         echo '</div>';
+    }
+
+    public function renderLotsPage(): void
+    {
+        (new LotsPage())->render();
+    }
+
+    public function renderTransfersPage(): void
+    {
+        (new TransfersPage())->render();
+    }
+
+    public function renderExpiryAlertsPage(): void
+    {
+        (new ExpiryAlertsPage())->render();
     }
 }

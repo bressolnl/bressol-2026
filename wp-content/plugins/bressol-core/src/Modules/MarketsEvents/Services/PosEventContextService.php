@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bressol\Modules\MarketsEvents\Services;
 
 use Bressol\Modules\MarketsEvents\Repositories\EventRepository;
+use Bressol\Modules\MarketsEvents\Services\PosEventEligibilityService;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -13,12 +14,15 @@ final class PosEventContextService
 {
     public const USER_META_KEY = 'bressol_pos_active_event_id';
     public const OPTION_KEY = 'bressol_pos_active_event_id_global';
+    private const USER_META_DATE_KEY = 'bressol_pos_active_event_date';
 
     private EventRepository $repository;
+    private PosEventEligibilityService $eligibilityService;
 
-    public function __construct(?EventRepository $repository = null)
+    public function __construct(?EventRepository $repository = null, ?PosEventEligibilityService $eligibilityService = null)
     {
         $this->repository = $repository ?? new EventRepository();
+        $this->eligibilityService = $eligibilityService ?? new PosEventEligibilityService($this->repository);
     }
 
     public function get_active_event_id(int $userId = 0): ?int
@@ -27,18 +31,63 @@ final class PosEventContextService
         if ($userId > 0) {
             $value = get_user_meta($userId, self::USER_META_KEY, true);
             $eventId = is_numeric($value) ? (int) $value : 0;
-            if ($eventId > 0) {
+            if ($eventId > 0 && $this->is_event_allowed_for_pos($eventId)) {
                 return $eventId;
             }
         }
 
         $global = get_option(self::OPTION_KEY, '');
         $globalId = is_numeric($global) ? (int) $global : 0;
-        if ($globalId > 0) {
+        if ($globalId > 0 && $this->is_event_allowed_for_pos($globalId)) {
             return $globalId;
         }
 
         return $this->resolve_default_event_id();
+    }
+
+    public function get_active_event_id_for_today(int $userId, string $today): ?int
+    {
+        $today = trim($today);
+        if ($today === '') {
+            return null;
+        }
+
+        $eventId = $this->get_active_event_id($userId);
+        if (!$eventId) {
+            return null;
+        }
+
+        $date = (string) get_user_meta($userId, self::USER_META_DATE_KEY, true);
+        if ($date !== $today) {
+            return null;
+        }
+
+        return $eventId;
+    }
+
+    public function set_active_event_for_today(int $userId, int $eventId, string $today): void
+    {
+        if ($userId <= 0) {
+            return;
+        }
+        $today = trim($today);
+        if ($eventId <= 0 || $today === '') {
+            $this->clear_active_event($userId);
+            return;
+        }
+
+        $this->set_active_event_id($eventId, $userId);
+        update_user_meta($userId, self::USER_META_DATE_KEY, $today);
+    }
+
+    public function clear_active_event(int $userId): void
+    {
+        if ($userId <= 0) {
+            return;
+        }
+
+        delete_user_meta($userId, self::USER_META_KEY);
+        delete_user_meta($userId, self::USER_META_DATE_KEY);
     }
 
     public function set_active_event_id(?int $eventId, int $userId = 0): void
@@ -64,25 +113,9 @@ final class PosEventContextService
 
     public function resolve_default_event_id(): ?int
     {
-        $now = new \DateTimeImmutable('now', wp_timezone());
-        $events = $this->repository->find_by_filters([
-            'status' => 'confirmed',
-            'channel' => 'pos',
-            'active_at' => $now,
-        ], 1, 1);
-
+        $events = $this->eligibilityService->list_eligible_events(1);
         if (!empty($events[0]['id'])) {
             return (int) $events[0]['id'];
-        }
-
-        $upcoming = $this->repository->find_by_filters([
-            'status' => 'confirmed',
-            'channel' => 'pos',
-            'date_from' => $now->format('Y-m-d H:i:s'),
-        ], 1, 1);
-
-        if (!empty($upcoming[0]['id'])) {
-            return (int) $upcoming[0]['id'];
         }
 
         return null;
@@ -98,30 +131,6 @@ final class PosEventContextService
         if (!$event) {
             return false;
         }
-
-        $status = (string) ($event['status'] ?? '');
-        if ($status !== 'confirmed') {
-            return false;
-        }
-
-        $channel = (string) ($event['channels'] ?? '');
-        if (!in_array($channel, ['pos', 'both'], true)) {
-            return false;
-        }
-
-        $start = isset($event['start_at']) ? (string) $event['start_at'] : '';
-        $end = isset($event['end_at']) ? (string) $event['end_at'] : '';
-        if ($start === '' || $end === '') {
-            return false;
-        }
-
-        $startAt = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $start, wp_timezone());
-        $endAt = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $end, wp_timezone());
-        if (!$startAt || !$endAt) {
-            return false;
-        }
-
-        $now = new \DateTimeImmutable('now', wp_timezone());
-        return $now >= $startAt && $now <= $endAt;
+        return $this->eligibilityService->is_event_eligible_for_pos($event);
     }
 }

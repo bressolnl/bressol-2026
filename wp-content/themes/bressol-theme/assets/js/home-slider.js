@@ -1,4 +1,39 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const drawer = document.querySelector('[data-bressol-drawer]');
+    const hamburger = document.querySelector('[data-bressol-hamburger]');
+    const drawerCloses = Array.from(document.querySelectorAll('[data-bressol-drawer-close]'));
+    const body = document.body;
+
+    const openDrawer = () => {
+        if (!drawer) {
+            return;
+        }
+        body.classList.add('bressol-drawer-open');
+        drawer.setAttribute('aria-hidden', 'false');
+    };
+
+    const closeDrawer = () => {
+        if (!drawer) {
+            return;
+        }
+        body.classList.remove('bressol-drawer-open');
+        drawer.setAttribute('aria-hidden', 'true');
+    };
+
+    if (hamburger) {
+        hamburger.addEventListener('click', openDrawer);
+    }
+
+    drawerCloses.forEach((button) => {
+        button.addEventListener('click', closeDrawer);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeDrawer();
+        }
+    });
+
     const slider = document.querySelector('[data-bressol-slider]');
     if (!slider) {
         return;
@@ -8,6 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const dots = Array.from(slider.querySelectorAll('[data-bressol-dot]'));
     const counter = slider.querySelector('[data-bressol-counter] .bressol-hero__current');
     const total = slider.querySelector('[data-bressol-counter] .bressol-hero__total');
+    const prevButton = slider.querySelector('[data-bressol-prev]');
+    const nextButton = slider.querySelector('[data-bressol-next]');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let index = 0;
     let timer = null;
@@ -25,7 +62,13 @@ document.addEventListener('DOMContentLoaded', () => {
             slide.classList.toggle('bressol-is-active', i === index);
         });
         dots.forEach((dot, i) => {
-            dot.classList.toggle('bressol-is-active', i === index);
+            const isActive = i === index;
+            dot.classList.toggle('bressol-is-active', isActive);
+            if (isActive) {
+                dot.setAttribute('aria-current', 'true');
+            } else {
+                dot.removeAttribute('aria-current');
+            }
         });
         if (counter) {
             counter.textContent = String(index + 1).padStart(2, '0');
@@ -57,6 +100,20 @@ document.addEventListener('DOMContentLoaded', () => {
             pause();
         });
     });
+
+    if (prevButton) {
+        prevButton.addEventListener('click', () => {
+            update(index - 1);
+            pause();
+        });
+    }
+
+    if (nextButton) {
+        nextButton.addEventListener('click', () => {
+            update(index + 1);
+            pause();
+        });
+    }
 
     slider.addEventListener('pointerenter', pause);
     slider.addEventListener('pointerleave', resume);
@@ -90,6 +147,17 @@ document.addEventListener('DOMContentLoaded', () => {
             update(deltaX < 0 ? index + 1 : index - 1);
         }
         resume();
+    });
+
+    slider.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowLeft') {
+            update(index - 1);
+            pause();
+        }
+        if (event.key === 'ArrowRight') {
+            update(index + 1);
+            pause();
+        }
     });
 
     update(0);

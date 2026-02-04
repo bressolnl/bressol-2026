@@ -38,4 +38,40 @@ final class Schema
             KEY channels (channels)
         ) {$charsetCollate};";
     }
+
+    public static function event_documents_table_sql(string $table, string $charsetCollate): string
+    {
+        return "CREATE TABLE {$table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            event_id BIGINT UNSIGNED NOT NULL,
+            attachment_id BIGINT UNSIGNED NOT NULL,
+            title VARCHAR(190) NOT NULL,
+            mime_type VARCHAR(100) NOT NULL,
+            file_url VARCHAR(255) NOT NULL,
+            created_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            KEY event_id (event_id),
+            KEY attachment_id (attachment_id),
+            KEY created_at (created_at)
+        ) {$charsetCollate};";
+    }
+
+    public static function event_cost_items_table_sql(string $table, string $charsetCollate): string
+    {
+        return "CREATE TABLE {$table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            event_id BIGINT UNSIGNED NOT NULL,
+            category VARCHAR(30) NOT NULL,
+            amount_cents BIGINT NOT NULL DEFAULT 0,
+            incurred_at DATE NOT NULL,
+            note VARCHAR(255) NULL,
+            event_document_id BIGINT UNSIGNED NULL,
+            created_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            KEY event_id (event_id),
+            KEY category (category),
+            KEY incurred_at (incurred_at),
+            KEY event_document_id (event_document_id)
+        ) {$charsetCollate};";
+    }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace Bressol\Modules\MarketsEvents\Admin;
 
 use Bressol\Modules\MarketsEvents\Repositories\EventRepository;
+use Bressol\Modules\MarketsEvents\Repositories\EventDocumentsRepository;
+use Bressol\Modules\MarketsEvents\Repositories\EventCostItemsRepository;
 use Bressol\Modules\MarketsEvents\Services\Capabilities;
 use Bressol\Modules\MarketsEvents\Services\EventService;
 use Bressol\Modules\MarketsEvents\Services\PosEventContextService;
@@ -96,11 +98,11 @@ final class AdminPages
         echo '<table class="widefat striped">';
         echo '<thead><tr>';
         echo '<th><input type="checkbox" data-bressol-toggle-all /></th>';
-        echo '<th>Título</th><th>Tipo</th><th>Status</th><th>Inicio</th><th>Fin</th><th>Canal</th><th>Ubicación</th><th>Costes (€)</th><th>Acciones</th>';
+        echo '<th>ID</th><th>Título</th><th>Tipo</th><th>Status</th><th>Inicio</th><th>Fin</th><th>Canal</th><th>Ubicación</th><th>Costes (€)</th><th>Acciones</th>';
         echo '</tr></thead><tbody>';
 
         if ($events === []) {
-            echo '<tr><td colspan="10">No hay eventos.</td></tr>';
+            echo '<tr><td colspan="11">No hay eventos.</td></tr>';
         }
 
         foreach ($events as $event) {
@@ -123,6 +125,7 @@ final class AdminPages
 
             echo '<tr>';
             echo '<td><input type="checkbox" name="event_ids[]" value="' . esc_attr((string) $id) . '" /></td>';
+            echo '<td><a href="' . esc_url($editUrl) . '">' . esc_html((string) $id) . '</a></td>';
             echo '<td>' . esc_html($title) . '</td>';
             echo '<td>' . esc_html($type) . '</td>';
             echo '<td>' . esc_html($status) . '</td>';
@@ -176,6 +179,10 @@ final class AdminPages
 
             if ($saved) {
                 add_settings_error('bressol_markets_events', 'event_saved', 'Evento guardado.', 'updated');
+                if ($eventId > 0) {
+                    $this->handle_documents_save($eventId, $_POST, $_FILES);
+                    $this->handle_cost_items_save($eventId, $_POST);
+                }
             } else {
                 add_settings_error('bressol_markets_events', 'event_save_failed', 'No se pudo guardar el evento.', 'error');
                 $normalized = $this->service->normalize($payload);
@@ -207,8 +214,11 @@ final class AdminPages
         echo '<div class="wrap">';
         echo '<h1>' . ($eventId > 0 ? 'Editar evento' : 'Nuevo evento') . '</h1>';
         settings_errors('bressol_markets_events');
+        if ($eventId > 0) {
+            echo '<p><strong>Event ID:</strong> ' . esc_html((string) $eventId) . '</p>';
+        }
 
-        echo '<form method="post">';
+        echo '<form method="post" enctype="multipart/form-data">';
         wp_nonce_field('bressol_events_save');
         echo '<table class="form-table">';
         echo $this->render_text_row('Título', 'title', (string) $data['title'], true, $fieldErrors['title'] ?? '');
@@ -242,6 +252,12 @@ final class AdminPages
             'both' => 'Both',
         ], $fieldErrors['channels'] ?? '');
         echo '</table>';
+
+        $documents = $eventId > 0 ? (new EventDocumentsRepository())->list_by_event($eventId) : [];
+        $costItems = $eventId > 0 ? (new EventCostItemsRepository())->list_by_event($eventId) : [];
+        $this->render_documents_section($eventId, $documents);
+        $this->render_cost_items_section($eventId, $documents, $costItems);
+
         echo '<p class="submit"><button type="submit" name="bressol_events_save_submit" class="button button-primary">Guardar</button></p>';
         echo '</form>';
         echo '</div>';
@@ -566,6 +582,243 @@ final class AdminPages
         }
         $html .= '</td></tr>';
         return $html;
+    }
+
+    /** @param array<int, array<string, mixed>> $documents */
+    private function render_documents_section(int $eventId, array $documents): void
+    {
+        echo '<h2>Documents</h2>';
+        if ($eventId <= 0) {
+            echo '<p class="description">Guarda el evento antes de subir documentos.</p>';
+            return;
+        }
+
+        echo '<table class="widefat striped" style="max-width:840px;">';
+        echo '<thead><tr><th>ID</th><th>Documento</th><th>Tipo</th><th>Fecha</th><th>Eliminar</th></tr></thead><tbody>';
+        if ($documents === []) {
+            echo '<tr><td colspan="5">No hay documentos.</td></tr>';
+        } else {
+            foreach ($documents as $doc) {
+                $id = (int) ($doc['id'] ?? 0);
+                $title = (string) ($doc['title'] ?? '');
+                $url = (string) ($doc['file_url'] ?? '');
+                $mime = (string) ($doc['mime_type'] ?? '');
+                $createdAt = (string) ($doc['created_at'] ?? '');
+                $label = $title !== '' ? $title : ('Document #' . $id);
+                echo '<tr>';
+                echo '<td>' . esc_html((string) $id) . '</td>';
+                echo '<td>' . ($url !== '' ? '<a href="' . esc_url($url) . '" target="_blank" rel="noopener">' . esc_html($label) . '</a>' : esc_html($label)) . '</td>';
+                echo '<td>' . esc_html($mime) . '</td>';
+                echo '<td>' . esc_html($createdAt) . '</td>';
+                echo '<td><label><input type="checkbox" name="delete_document_ids[]" value="' . esc_attr((string) $id) . '" /> eliminar</label></td>';
+                echo '</tr>';
+            }
+        }
+        echo '</tbody></table>';
+
+        echo '<p style="margin-top:12px;"><label>Subir documento: <input type="file" name="bressol_event_document" accept="application/pdf,image/*" /></label></p>';
+    }
+
+    /** @param array<int, array<string, mixed>> $documents
+     *  @param array<int, array<string, mixed>> $costItems
+     */
+    private function render_cost_items_section(int $eventId, array $documents, array $costItems): void
+    {
+        echo '<h2>Cost items</h2>';
+        if ($eventId <= 0) {
+            echo '<p class="description">Guarda el evento antes de añadir costes.</p>';
+            return;
+        }
+
+        $documentIds = [];
+        foreach ($documents as $doc) {
+            $docId = (int) ($doc['id'] ?? 0);
+            if ($docId > 0) {
+                $documentIds[$docId] = $doc;
+            }
+        }
+
+        echo '<table class="widefat striped" style="max-width:980px;">';
+        echo '<thead><tr><th>Eliminar</th><th>Categoria</th><th>Amount (cents)</th><th>Incurred at</th><th>Note</th><th>Doc ID</th></tr></thead><tbody>';
+
+        $rows = $costItems;
+        $extra = 5;
+        for ($i = 0; $i < $extra; $i++) {
+            $rows[] = [
+                'id' => 0,
+                'category' => '',
+                'amount_cents' => '',
+                'incurred_at' => '',
+                'note' => '',
+                'event_document_id' => '',
+            ];
+        }
+
+        foreach ($rows as $item) {
+            $id = (int) ($item['id'] ?? 0);
+            $category = (string) ($item['category'] ?? '');
+            $amount = $item['amount_cents'] ?? '';
+            $incurred = (string) ($item['incurred_at'] ?? '');
+            $note = (string) ($item['note'] ?? '');
+            $docId = $item['event_document_id'] ?? '';
+
+            echo '<tr>';
+            echo '<td>';
+            if ($id > 0) {
+                echo '<input type="checkbox" name="delete_cost_item_ids[]" value="' . esc_attr((string) $id) . '" />';
+            } else {
+                echo '&mdash;';
+            }
+            echo '<input type="hidden" name="cost_item_id[]" value="' . esc_attr((string) $id) . '" />';
+            echo '</td>';
+            echo '<td>' . $this->render_cost_category_select($category) . '</td>';
+            echo '<td><input type="number" name="cost_item_amount_cents[]" value="' . esc_attr((string) $amount) . '" /></td>';
+            echo '<td><input type="date" name="cost_item_incurred_at[]" value="' . esc_attr($incurred) . '" /></td>';
+            echo '<td><input type="text" name="cost_item_note[]" value="' . esc_attr($note) . '" /></td>';
+            echo '<td><input type="number" name="cost_item_document_id[]" value="' . esc_attr((string) $docId) . '" /></td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+
+        if ($documentIds !== []) {
+            echo '<p class="description">Docs disponibles: ';
+            $parts = [];
+            foreach ($documentIds as $docId => $doc) {
+                $label = (string) ($doc['title'] ?? ('Doc #' . $docId));
+                $parts[] = $docId . ' - ' . $label;
+            }
+            echo esc_html(implode(', ', $parts));
+            echo '</p>';
+        }
+    }
+
+    private function render_cost_category_select(string $value): string
+    {
+        $options = [
+            'booth_fee' => 'booth_fee',
+            'reservation' => 'reservation',
+            'parking' => 'parking',
+            'hotel' => 'hotel',
+            'fuel' => 'fuel',
+            'tolls' => 'tolls',
+            'supplies' => 'supplies',
+            'refund' => 'refund',
+            'correction' => 'correction',
+            'other' => 'other',
+        ];
+
+        $html = '<select name="cost_item_category[]">';
+        foreach ($options as $key => $label) {
+            $html .= '<option value="' . esc_attr($key) . '" ' . selected($value, $key, false) . '>' . esc_html($label) . '</option>';
+        }
+        $html .= '</select>';
+
+        return $html;
+    }
+
+    /** @param array<string, mixed> $input
+     *  @param array<string, mixed> $files
+     */
+    private function handle_documents_save(int $eventId, array $input, array $files): void
+    {
+        if ($eventId <= 0) {
+            return;
+        }
+
+        $repo = new EventDocumentsRepository();
+        $deleteIds = isset($input['delete_document_ids']) && is_array($input['delete_document_ids'])
+            ? array_map('absint', $input['delete_document_ids'])
+            : [];
+        if ($deleteIds !== []) {
+            $repo->delete_by_ids($eventId, $deleteIds);
+        }
+
+        if (empty($files['bressol_event_document']) || !is_array($files['bressol_event_document'])) {
+            return;
+        }
+
+        if (!function_exists('media_handle_upload')) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+        }
+
+        $attachmentId = media_handle_upload('bressol_event_document', 0);
+        if (is_wp_error($attachmentId)) {
+            add_settings_error('bressol_markets_events', 'event_doc_upload_failed', 'No se pudo subir el documento.', 'error');
+            return;
+        }
+
+        $fileUrl = wp_get_attachment_url($attachmentId);
+        $mimeType = get_post_mime_type($attachmentId);
+        $title = get_the_title($attachmentId);
+
+        if (!$fileUrl || !$mimeType) {
+            add_settings_error('bressol_markets_events', 'event_doc_invalid', 'Documento inválido.', 'error');
+            return;
+        }
+
+        $repo->insert_document($eventId, (int) $attachmentId, (string) $title, (string) $mimeType, (string) $fileUrl);
+    }
+
+    /** @param array<string, mixed> $input */
+    private function handle_cost_items_save(int $eventId, array $input): void
+    {
+        if ($eventId <= 0) {
+            return;
+        }
+
+        $repo = new EventCostItemsRepository();
+        $deleteIds = isset($input['delete_cost_item_ids']) && is_array($input['delete_cost_item_ids'])
+            ? array_map('absint', $input['delete_cost_item_ids'])
+            : [];
+        if ($deleteIds !== []) {
+            $repo->delete_by_ids($eventId, $deleteIds);
+        }
+
+        $ids = isset($input['cost_item_id']) && is_array($input['cost_item_id']) ? $input['cost_item_id'] : [];
+        $categories = isset($input['cost_item_category']) && is_array($input['cost_item_category']) ? $input['cost_item_category'] : [];
+        $amounts = isset($input['cost_item_amount_cents']) && is_array($input['cost_item_amount_cents']) ? $input['cost_item_amount_cents'] : [];
+        $incurred = isset($input['cost_item_incurred_at']) && is_array($input['cost_item_incurred_at']) ? $input['cost_item_incurred_at'] : [];
+        $notes = isset($input['cost_item_note']) && is_array($input['cost_item_note']) ? $input['cost_item_note'] : [];
+        $docIds = isset($input['cost_item_document_id']) && is_array($input['cost_item_document_id']) ? $input['cost_item_document_id'] : [];
+
+        $items = [];
+        $count = min(max(count($ids), count($categories), count($amounts), count($incurred)), 200);
+        for ($i = 0; $i < $count; $i++) {
+            $id = isset($ids[$i]) ? absint($ids[$i]) : 0;
+            $category = isset($categories[$i]) ? sanitize_key((string) wp_unslash($categories[$i])) : 'other';
+            $amountRaw = isset($amounts[$i]) ? wp_unslash($amounts[$i]) : '';
+            $amount = is_numeric($amountRaw) ? (int) $amountRaw : 0;
+            $incurredAt = isset($incurred[$i]) ? sanitize_text_field(wp_unslash($incurred[$i])) : '';
+            $note = isset($notes[$i]) ? sanitize_text_field(wp_unslash($notes[$i])) : '';
+            $docId = isset($docIds[$i]) ? absint($docIds[$i]) : 0;
+
+            if ($category === '') {
+                $category = 'other';
+            }
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $incurredAt)) {
+                $incurredAt = current_time('Y-m-d');
+            }
+
+            if ($id === 0 && $amount === 0 && $note === '' && $docId === 0) {
+                continue;
+            }
+
+            $items[] = [
+                'id' => $id,
+                'category' => $category,
+                'amount_cents' => $amount,
+                'incurred_at' => $incurredAt,
+                'note' => $note !== '' ? $note : null,
+                'event_document_id' => $docId > 0 ? $docId : null,
+            ];
+        }
+
+        if ($items !== []) {
+            $repo->upsert_items($eventId, $items);
+        }
     }
 
     private function render_field_error(string $message): string

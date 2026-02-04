@@ -5,6 +5,8 @@ namespace Bressol\Modules\Inventory;
 
 use Bressol\Core\ModuleInterface;
 use Bressol\Modules\Inventory\Admin\AdminPages;
+use Bressol\Modules\Inventory\Admin\Actions;
+use Bressol\Modules\Inventory\Services\ExpiryAlertsService;
 use Bressol\Modules\Inventory\Installer;
 use Bressol\Modules\Inventory\Cli\SellableCommand;
 use Bressol\Modules\Inventory\Cli\SelfTestCommand;
@@ -39,9 +41,13 @@ final class InventoryModule implements ModuleInterface
             Installer::maybe_upgrade();
         }
 
-        if (is_admin()) {
-            $adminPages = new AdminPages($this->capabilities, $this->sellableService);
-            add_action('admin_menu', [$adminPages, 'registerMenus']);
+        $adminPages = new AdminPages($this->capabilities, $this->sellableService);
+        add_action('admin_menu', [$adminPages, 'registerMenus']);
+        (new Actions())->register();
+
+        add_action('bressol_inventory_expiry_alerts_cron', [$this, 'runExpiryAlertsCron']);
+        if (!wp_next_scheduled('bressol_inventory_expiry_alerts_cron')) {
+            wp_schedule_event(time() + 300, 'daily', 'bressol_inventory_expiry_alerts_cron');
         }
 
         add_filter('woocommerce_add_to_cart_validation', [$this, 'validateAddToCart'], 20, 3);
@@ -126,5 +132,15 @@ final class InventoryModule implements ModuleInterface
         }
 
         $this->cacheService->bump_version();
+    }
+
+    public function runExpiryAlertsCron(): void
+    {
+        (new ExpiryAlertsService())->refresh_cache();
+    }
+
+    public static function deactivate(): void
+    {
+        wp_clear_scheduled_hook('bressol_inventory_expiry_alerts_cron');
     }
 }

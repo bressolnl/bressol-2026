@@ -78,4 +78,27 @@ final class Schema
             KEY product_id (product_id)
         ) {$charsetCollate};";
     }
+
+    public static function transfer_lot_allocations_table_sql(string $table, string $charsetCollate): string
+    {
+        // Nota: dbDelta puede no aplicar UNIQUE en algunos setups; ver checklist manual.
+        return "CREATE TABLE {$table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            transfer_id BIGINT UNSIGNED NOT NULL,
+            transfer_line_id BIGINT UNSIGNED NOT NULL,
+            product_id BIGINT UNSIGNED NOT NULL,
+            lot_id_es BIGINT UNSIGNED NOT NULL,
+            lot_id_nl BIGINT UNSIGNED NULL,
+            qty_units INT NOT NULL,
+            unit_cogs_cents INT NOT NULL,
+            expiry_date DATE NULL,
+            created_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uniq_alloc (transfer_id, transfer_line_id, lot_id_es, qty_units, unit_cogs_cents),
+            KEY transfer_id (transfer_id),
+            KEY transfer_line_id (transfer_line_id),
+            KEY lot_id_es (lot_id_es),
+            KEY lot_id_nl (lot_id_nl)
+        ) {$charsetCollate};";
+    }
 }

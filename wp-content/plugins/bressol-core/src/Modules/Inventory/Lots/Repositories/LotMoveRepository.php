@@ -19,7 +19,7 @@ final class LotMoveRepository
         string $refId,
         ?string $note = null
     ): int {
-        if ($lotId <= 0 || $qty === 0) {
+        if ($lotId <= 0) {
             return 0;
         }
 
@@ -27,7 +27,11 @@ final class LotMoveRepository
         $refType = sanitize_key($refType);
         $refId = trim($refId);
 
-        if (!in_array($type, ['receipt', 'consume', 'adjust'], true)) {
+        if ($qty === 0 && $type !== 'cogs_adjust') {
+            return 0;
+        }
+
+        if (!in_array($type, ['receipt', 'consume', 'adjust', 'cogs_adjust'], true)) {
             return 0;
         }
 

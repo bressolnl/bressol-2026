@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Bressol\Modules\B2B\Repositories;
 
+use Bressol\Modules\B2B\Support\Masking;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -105,6 +107,47 @@ final class LeadEventsRepository
         return is_numeric($count) && (int) $count > 0;
     }
 
+    /** @param array<int> $leadIds
+     *  @return array<int, string>
+     */
+    public function get_last_event_types(array $leadIds): array
+    {
+        $leadIds = array_values(array_unique(array_filter(array_map('intval', $leadIds))));
+        if ($leadIds === []) {
+            return [];
+        }
+
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($leadIds), '%d'));
+        $table = $this->table();
+        $sql = "SELECT e.lead_id, e.type
+            FROM {$table} e
+            INNER JOIN (
+                SELECT lead_id, MAX(id) AS max_id
+                FROM {$table}
+                WHERE lead_id IN ({$placeholders})
+                  AND type NOT IN ('catalog_view', 'pricelist_view')
+                GROUP BY lead_id
+            ) latest ON latest.max_id = e.id";
+
+        $prepared = $wpdb->prepare($sql, $leadIds);
+        $rows = $wpdb->get_results($prepared, ARRAY_A);
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $latest = [];
+        foreach ($rows as $row) {
+            $leadId = (int) ($row['lead_id'] ?? 0);
+            if ($leadId <= 0) {
+                continue;
+            }
+            $latest[$leadId] = (string) ($row['type'] ?? '');
+        }
+
+        return $latest;
+    }
+
 
     private function table(): string
     {
@@ -125,7 +168,7 @@ final class LeadEventsRepository
                 continue;
             }
             if (stripos($key, 'email') !== false) {
-                $context[$key] = $this->mask_email($value);
+                $context[$key] = Masking::mask_email($value);
                 continue;
             }
             if (stripos($key, 'phone') !== false) {
@@ -135,17 +178,4 @@ final class LeadEventsRepository
         return $context;
     }
 
-    private function mask_email(string $email): string
-    {
-        $email = trim($email);
-        if ($email === '' || strpos($email, '@') === false) {
-            return '';
-        }
-        [$local, $domain] = explode('@', $email, 2);
-        $localMasked = substr($local, 0, 1) . str_repeat('*', max(1, strlen($local) - 2)) . substr($local, -1);
-        $domainParts = explode('.', $domain);
-        $domainMasked = substr($domainParts[0], 0, 1) . str_repeat('*', max(1, strlen($domainParts[0]) - 2)) . substr($domainParts[0], -1);
-        $suffix = count($domainParts) > 1 ? '.' . end($domainParts) : '';
-        return $localMasked . '@' . $domainMasked . $suffix;
-    }
 }

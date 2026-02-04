@@ -104,4 +104,47 @@ final class TaskService
 
         return true;
     }
+
+    public function snooze(int $taskId, int $hours = 24): bool
+    {
+        $task = $this->tasks->find_by_id($taskId);
+        if (!$task) {
+            return false;
+        }
+        if ((string) ($task['status'] ?? '') === 'done') {
+            return false;
+        }
+        $dueAt = (string) ($task['due_at'] ?? '');
+        $current = $dueAt !== '' ? strtotime($dueAt) : false;
+        $base = $current !== false ? $current : current_time('timestamp');
+        $newDue = date('Y-m-d H:i:s', $base + ($hours * 3600));
+        $updated = $this->tasks->update($taskId, ['due_at' => $newDue]);
+        if (!$updated) {
+            return false;
+        }
+        $leadId = (int) ($task['lead_id'] ?? 0);
+        if ($leadId > 0) {
+            $this->leads->update($leadId, [
+                'last_activity_at' => current_time('mysql'),
+                'updated_at' => current_time('mysql'),
+            ]);
+            $this->events->insert_event($leadId, 'task_snoozed', [
+                'task_id' => (int) ($task['id'] ?? 0),
+            ]);
+        }
+        return true;
+    }
+
+    public function update_note(int $taskId, string $note): bool
+    {
+        $task = $this->tasks->find_by_id($taskId);
+        if (!$task) {
+            return false;
+        }
+        $note = substr(sanitize_text_field($note), 0, 140);
+        if ($note === '') {
+            return false;
+        }
+        return $this->tasks->update($taskId, ['note' => $note]);
+    }
 }

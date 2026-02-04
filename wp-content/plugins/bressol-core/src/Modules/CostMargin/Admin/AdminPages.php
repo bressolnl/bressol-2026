@@ -15,6 +15,33 @@ final class AdminPages
     {
         add_submenu_page(
             'bressol',
+            'Cost & Margin',
+            'Cost & Margin',
+            'manage_options',
+            'bressol-cost-margin',
+            [$this, 'renderCostDefaultsPage']
+        );
+
+        add_submenu_page(
+            'bressol-cost-margin',
+            'Cost Defaults',
+            'Cost Defaults',
+            'manage_options',
+            'bressol-cost-defaults',
+            [$this, 'renderCostDefaultsPage']
+        );
+
+        add_submenu_page(
+            'bressol-cost-margin',
+            'Transport',
+            'Transport',
+            'manage_options',
+            'bressol-transport',
+            [$this, 'renderTransportPage']
+        );
+
+        add_submenu_page(
+            'bressol',
             'Diagnostics',
             'Diagnostics',
             'manage_options',
@@ -29,7 +56,11 @@ final class AdminPages
             wp_die('No autorizado.');
         }
 
-        $channel = isset($_GET['channel']) ? sanitize_text_field(wp_unslash($_GET['channel'])) : 'pos';
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['channel'])) {
+            $channel = sanitize_text_field(wp_unslash($_POST['channel']));
+        } else {
+            $channel = isset($_GET['channel']) ? sanitize_text_field(wp_unslash($_GET['channel'])) : 'pos';
+        }
         if (!in_array($channel, ['pos', 'online'], true)) {
             $channel = 'pos';
         }
@@ -78,6 +109,16 @@ final class AdminPages
         }
 
         echo '</div>';
+    }
+
+    public function renderCostDefaultsPage(): void
+    {
+        (new CostDefaultsPage())->render();
+    }
+
+    public function renderTransportPage(): void
+    {
+        (new TransportPage())->render();
     }
 
     /** @return array{summary:array{pass:int,fail:int},rows:array<int, array<string, mixed>>} */

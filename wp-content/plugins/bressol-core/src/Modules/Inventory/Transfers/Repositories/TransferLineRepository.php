@@ -72,6 +72,20 @@ final class TransferLineRepository
         return $updated === 1;
     }
 
+    public function delete_by_transfer(int $transferId): int
+    {
+        if ($transferId <= 0) {
+            return 0;
+        }
+
+        global $wpdb;
+        $deleted = $wpdb->delete($this->table(), ['transfer_id' => $transferId], ['%d']);
+        if ($deleted === false) {
+            return 0;
+        }
+        return (int) $deleted;
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function get_lines(int $transferId): array
     {

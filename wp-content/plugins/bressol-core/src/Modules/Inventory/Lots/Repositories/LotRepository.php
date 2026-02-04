@@ -116,6 +116,28 @@ final class LotRepository
         return $updated === 1;
     }
 
+    public function increment_unit_cogs(int $lotId, int $deltaCents): bool
+    {
+        if ($lotId <= 0 || $deltaCents < 0) {
+            return false;
+        }
+
+        if ($deltaCents === 0) {
+            return true;
+        }
+
+        global $wpdb;
+        $table = $this->table();
+        $now = current_time('mysql');
+
+        $sql = "UPDATE {$table}
+            SET unit_cogs_cents = unit_cogs_cents + %d, updated_at = %s
+            WHERE id = %d";
+        $updated = $wpdb->query($wpdb->prepare($sql, $deltaCents, $now, $lotId));
+
+        return $updated === 1;
+    }
+
     public function get_available_qty(
         int $productId,
         string $location,

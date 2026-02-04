@@ -12,48 +12,59 @@ if (!defined('ABSPATH')) {
 <body <?php body_class(); ?>>
 <?php wp_body_open(); ?>
 <a class="bressol-skip-link" href="#main"><?php esc_html_e('Skip to content', 'bressol-theme'); ?></a>
-<header class="bressol-site-header bressol-site-header--transparent" data-bressol-header>
-    <div class="bressol-site-header__inner bressol-container">
-        <a class="bressol-brand" href="<?php echo esc_url(home_url('/')); ?>">
-            <span class="bressol-brand__name">Bressol</span>
+<header class="bressol-header" data-bressol-header>
+    <div class="bressol-header__inner">
+        <a class="bressol-header__logo" href="<?php echo esc_url(home_url('/')); ?>">
+            BRESSOL
         </a>
-        <nav class="bressol-nav" aria-label="<?php echo esc_attr__('Hoofdnavigatie', 'bressol-theme'); ?>">
-            <?php if (has_nav_menu('primary')) : ?>
-                <?php wp_nav_menu([
-                    'theme_location' => 'primary',
-                    'container' => false,
-                    'menu_class' => 'bressol-nav__list',
-                    'depth' => 1,
-                    'fallback_cb' => false,
-                ]); ?>
-            <?php else : ?>
-                <?php wp_page_menu([
-                    'menu_class' => 'bressol-nav__list',
-                    'container' => false,
-                    'depth' => 1,
-                ]); ?>
-            <?php endif; ?>
+        <nav class="bressol-header__nav" aria-label="<?php echo esc_attr__('Hoofdnavigatie', 'bressol-theme'); ?>">
+            <ul class="bressol-header__nav-list">
+                <li><a class="bressol-header__nav-link" href="#">Momenten</a></li>
+                <li><a class="bressol-header__nav-link" href="#">Shop</a></li>
+                <li><a class="bressol-header__nav-link" href="#">Cadeaus</a></li>
+                <li><a class="bressol-header__nav-link" href="#">Oorsprong</a></li>
+                <li><a class="bressol-header__nav-link" href="#">Club</a></li>
+            </ul>
         </nav>
-        <?php $header_cta_link = bressol_get_page_link('advies', '/'); ?>
-        <a class="bressol-header-cta" href="<?php echo esc_url($header_cta_link); ?>">
-            <?php esc_html_e('Advies', 'bressol-theme'); ?>
-        </a>
-        <div class="bressol-site-header__actions" aria-label="<?php echo esc_attr__('Snelle acties', 'bressol-theme'); ?>">
-            <button class="bressol-site-header__icon" type="button" data-bressol-toggle="search" aria-expanded="false" aria-controls="bressol-panel-search">
+        <div class="bressol-header__actions" aria-label="<?php echo esc_attr__('Snelle acties', 'bressol-theme'); ?>">
+            <a class="bressol-header__icon" href="#" aria-label="<?php echo esc_attr__('Zoeken', 'bressol-theme'); ?>">
                 <span class="screen-reader-text"><?php esc_html_e('Zoeken', 'bressol-theme'); ?></span>
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M11 3a8 8 0 1 0 4.9 14.3l4 4a1 1 0 0 0 1.4-1.4l-4-4A8 8 0 0 0 11 3zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12z" fill="currentColor"/>
                 </svg>
-            </button>
-            <button class="bressol-site-header__icon" type="button" data-bressol-toggle="cart" aria-expanded="false" aria-controls="bressol-panel-cart">
+            </a>
+            <a class="bressol-header__icon" href="#" aria-label="<?php echo esc_attr__('Winkelwagen', 'bressol-theme'); ?>">
                 <span class="screen-reader-text"><?php esc_html_e('Winkelwagen', 'bressol-theme'); ?></span>
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M6 6h14l-2 9H8L6 6zm2 13a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm8 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill="currentColor"/>
+                </svg>
+                <span class="bressol-header__badge" aria-hidden="true">2</span>
+            </a>
+            <button class="bressol-header__burger" type="button" data-bressol-hamburger aria-label="<?php echo esc_attr__('Menu', 'bressol-theme'); ?>">
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
             </button>
         </div>
     </div>
 </header>
+
+<div class="bressol-drawer__overlay" data-bressol-drawer-close aria-hidden="true"></div>
+<aside class="bressol-drawer" data-bressol-drawer aria-hidden="true">
+    <div class="bressol-drawer__header">
+        <span class="bressol-header__logo">BRESSOL</span>
+        <button class="bressol-drawer__close" type="button" data-bressol-drawer-close aria-label="<?php echo esc_attr__('Sluiten', 'bressol-theme'); ?>">
+            &times;
+        </button>
+    </div>
+    <nav class="bressol-drawer__nav" aria-label="<?php echo esc_attr__('Mobiele navigatie', 'bressol-theme'); ?>">
+        <a class="bressol-drawer__link" href="#">Momenten</a>
+        <a class="bressol-drawer__link" href="#">Shop</a>
+        <a class="bressol-drawer__link" href="#">Cadeaus</a>
+        <a class="bressol-drawer__link" href="#">Oorsprong</a>
+        <a class="bressol-drawer__link" href="#">Club</a>
+    </nav>
+</aside>
 
 <div class="bressol-overlay" aria-hidden="true"></div>
 

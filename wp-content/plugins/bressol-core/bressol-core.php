@@ -40,15 +40,20 @@ spl_autoload_register(static function (string $class): void {
 register_activation_hook(__FILE__, static function (): void {
     \Bressol\Modules\Esp\Installer::install();
     \Bressol\Modules\Esp\Module::scheduleCron();
-    \Bressol\Modules\Crm\Installer::install();
+    (new \Bressol\Modules\Crm\Installer())->install();
     \Bressol\Modules\Crm\Module::scheduleCron();
     \Bressol\Modules\Pos\PosModule::schedule_cron();
+    \Bressol\Modules\MarketsEvents\Services\EventCompletionService::schedule();
+    \Bressol\Modules\B2B\Installer::maybe_upgrade();
+    flush_rewrite_rules(false);
 });
 
 register_deactivation_hook(__FILE__, static function (): void {
     \Bressol\Modules\Esp\Module::clearCron();
     \Bressol\Modules\Crm\Module::clearCron();
     \Bressol\Modules\Pos\PosModule::clear_cron();
+    \Bressol\Modules\MarketsEvents\Services\EventCompletionService::clear();
+    \Bressol\Modules\Inventory\InventoryModule::deactivate();
 });
 
 add_action('init', static function (): void {

@@ -101,6 +101,7 @@ final class OrderCogsFinalizer
                             'order_item_id' => (int) $item->get_id(),
                             'product_id' => $productId,
                             'is_pack_component' => $allocation['is_pack_component'],
+                            'parent_line_key' => (string) $item->get_meta('_bressol_pos_line_key', true),
                         ];
                         $unitCogs = (int) ($allocation['unit_cogs_cents'] ?? 0);
                         if ($unitCogs <= 0) {
@@ -129,6 +130,8 @@ final class OrderCogsFinalizer
                     'order_item_id' => (int) $dec['order_item_id'],
                     'product_id' => (int) $dec['product_id'],
                     'is_pack_component' => (bool) $dec['is_pack_component'],
+                    'event_id' => (int) $order->get_meta('_bressol_event_id', true),
+                    'parent_line_key' => (string) ($dec['parent_line_key'] ?? ''),
                 ]);
 
                 $this->lotMoveRepository->add_move(
@@ -295,6 +298,35 @@ final class OrderCogsFinalizer
     {
         $pack = $item->get_meta('_bressol_pack', true);
         if (!is_array($pack)) {
+            $bundle = $item->get_meta('_bressol_pos_bundle_picks', true);
+            if (is_string($bundle)) {
+                $bundle = json_decode($bundle, true);
+            }
+            if (is_array($bundle)) {
+                $picks = $bundle['picks'] ?? null;
+                if (is_array($picks)) {
+                    $requirements = [];
+                    foreach ($picks as $pick) {
+                        if (!is_array($pick)) {
+                            continue;
+                        }
+                        $productId = isset($pick['product_id']) ? (int) $pick['product_id'] : 0;
+                        $qty = isset($pick['qty']) ? (int) $pick['qty'] : 0;
+                        if ($productId <= 0 || $qty <= 0) {
+                            continue;
+                        }
+                        $requirements[] = [
+                            'product_id' => $productId,
+                            'qty' => $qty * $itemQty,
+                            'is_pack_component' => true,
+                        ];
+                    }
+                    if ($requirements !== []) {
+                        return $requirements;
+                    }
+                }
+            }
+
             $productId = (int) $item->get_product_id();
             return $productId > 0 ? [[
                 'product_id' => $productId,

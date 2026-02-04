@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 final class EventService
 {
     private const TYPES = ['market', 'event', 'delivery', 'other'];
-    private const STATUSES = ['planned', 'confirmed', 'done', 'cancelled'];
+    private const STATUSES = ['planned', 'confirmed', 'paid', 'completed', 'cancelled', 'done'];
     private const CHANNELS = ['pos', 'web', 'both'];
 
     private EventRepository $repository;

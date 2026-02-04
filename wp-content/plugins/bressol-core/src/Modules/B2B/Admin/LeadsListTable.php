@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace Bressol\Modules\B2B\Admin;
 
 use Bressol\Modules\B2B\Repositories\LeadRepository;
+use Bressol\Modules\B2B\Repositories\LeadEventsRepository;
+use Bressol\Modules\B2B\Services\LeadService;
+use Bressol\Modules\B2B\Support\Masking;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -16,6 +19,8 @@ if (!class_exists('WP_List_Table')) {
 final class LeadsListTable extends \WP_List_Table
 {
     private LeadRepository $repository;
+    private LeadEventsRepository $events;
+    private LeadService $leadService;
     /** @var array<string, mixed> */
     private array $filters;
     private int $perPage = 20;
@@ -29,6 +34,8 @@ final class LeadsListTable extends \WP_List_Table
             'ajax' => false,
         ]);
         $this->repository = $repository;
+        $this->events = new LeadEventsRepository();
+        $this->leadService = new LeadService($repository, $this->events);
         $this->filters = $filters;
     }
 
@@ -37,14 +44,14 @@ final class LeadsListTable extends \WP_List_Table
     {
         return [
             'id' => 'ID',
-            'email' => 'Email',
+            'email_masked' => 'Email',
             'company_name' => 'Empresa',
-            'tier' => 'Tier',
+            'temperature' => 'Temperatura',
             'status' => 'Estado',
-            'owner_user_id' => 'Owner',
+            'owner' => 'Owner',
             'source' => 'Origen',
             'lead_score' => 'Score',
-            'created_at' => 'Creado',
+            'updated_at' => 'Actualizado',
             'actions' => 'Acciones',
         ];
     }
@@ -55,7 +62,41 @@ final class LeadsListTable extends \WP_List_Table
         $items = $this->repository->find_by_filters($this->filters, $this->perPage, $page);
         $total = $this->repository->count_by_filters($this->filters);
 
-        $this->items = $items;
+        $columns = $this->get_columns();
+        $hidden = [];
+        $sortable = [];
+        $this->_column_headers = [$columns, $hidden, $sortable];
+
+        $leadIds = [];
+        foreach ($items as $item) {
+            if (is_array($item) && isset($item['id'])) {
+                $leadIds[] = (int) $item['id'];
+            }
+        }
+        $lastEvents = $this->events->get_last_event_types($leadIds);
+
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $leadId = (int) ($item['id'] ?? 0);
+            $lastEvent = $leadId > 0 && isset($lastEvents[$leadId]) ? $lastEvents[$leadId] : '';
+            $temp = $this->leadService->compute_temperature(array_merge($item, ['last_event_type' => $lastEvent]));
+            $normalized[] = [
+                'id' => $leadId,
+                'email_masked' => Masking::mask_email((string) ($item['email'] ?? '')),
+                'company_name' => (string) ($item['company_name'] ?? ''),
+                'temperature' => $temp,
+                'status' => (string) ($item['status'] ?? ''),
+                'owner' => $this->user_label((int) ($item['owner_user_id'] ?? 0)),
+                'source' => (string) ($item['source'] ?? ''),
+                'lead_score' => (int) ($item['lead_score'] ?? 0),
+                'updated_at' => (string) ($item['updated_at'] ?? ''),
+            ];
+        }
+
+        $this->items = $normalized;
         $this->set_pagination_args([
             'total_items' => $total,
             'per_page' => $this->perPage,
@@ -65,30 +106,81 @@ final class LeadsListTable extends \WP_List_Table
     /** @param array<string, mixed> $item */
     public function column_default($item, $column_name): string
     {
-        switch ($column_name) {
-            case 'id':
-                return (string) ($item['id'] ?? '');
-            case 'email':
-                return esc_html((string) ($item['email'] ?? ''));
-            case 'company_name':
-                return esc_html((string) ($item['company_name'] ?? ''));
-            case 'tier':
-                return esc_html((string) ($item['tier'] ?? ''));
-            case 'status':
-                return esc_html((string) ($item['status'] ?? ''));
-            case 'owner_user_id':
-                return esc_html($this->user_label((int) ($item['owner_user_id'] ?? 0)));
-            case 'source':
-                return esc_html((string) ($item['source'] ?? ''));
-            case 'lead_score':
-                return esc_html((string) ($item['lead_score'] ?? '0'));
-            case 'created_at':
-                return esc_html((string) ($item['created_at'] ?? ''));
-            case 'actions':
-                return $this->render_actions((int) ($item['id'] ?? 0));
-            default:
-                return '';
+        $value = $item[$column_name] ?? '';
+        if (is_scalar($value)) {
+            return esc_html((string) $value);
         }
+        return '';
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_id($item): string
+    {
+        return esc_html((string) ($item['id'] ?? ''));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_email_masked($item): string
+    {
+        return esc_html((string) ($item['email_masked'] ?? ''));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_status($item): string
+    {
+        return esc_html((string) ($item['status'] ?? ''));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_temperature($item): string
+    {
+        $payload = $item['temperature'] ?? [];
+        if (!is_array($payload)) {
+            return '';
+        }
+        $temp = (string) ($payload['temperature'] ?? '');
+        $stale = !empty($payload['stale']);
+        if ($temp === '') {
+            return '';
+        }
+        $style = 'display:inline-block;padding:2px 6px;border-radius:10px;font-size:11px;font-weight:600;';
+        $color = '#6c757d';
+        if ($temp === 'HOT') {
+            $color = '#c92a2a';
+        } elseif ($temp === 'WARM') {
+            $color = '#f08c00';
+        } elseif ($temp === 'COLD') {
+            $color = '#1c7ed6';
+        }
+        $html = '<span style="' . esc_attr($style . 'background:' . $color . ';color:#fff;') . '">' . esc_html($temp) . '</span>';
+        if ($stale) {
+            $html .= ' <span style="font-size:11px;color:#555;">stale</span>';
+        }
+        return $html;
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_owner($item): string
+    {
+        return esc_html((string) ($item['owner'] ?? ''));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_lead_score($item): string
+    {
+        return esc_html((string) ($item['lead_score'] ?? '0'));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_updated_at($item): string
+    {
+        return esc_html((string) ($item['updated_at'] ?? ''));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_actions($item): string
+    {
+        return $this->render_actions((int) ($item['id'] ?? 0));
     }
 
     private function render_actions(int $leadId): string
@@ -111,4 +203,5 @@ final class LeadsListTable extends \WP_List_Table
         }
         return $user->display_name !== '' ? (string) $user->display_name : (string) $userId;
     }
+
 }

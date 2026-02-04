@@ -76,15 +76,21 @@ final class InternalOrderService
             if (method_exists($orderItem, 'set_total')) {
                 $orderItem->set_total(0);
             }
+            if (method_exists($orderItem, 'set_taxes')) {
+                $orderItem->set_taxes(['total' => [], 'subtotal' => []]);
+            }
             $orderItem->save();
         }
 
         // We still calculate totals to keep WooCommerce state consistent,
         // but we force all totals to zero for internal sampling orders.
-        $order->calculate_totals();
+        $order->calculate_totals(false);
+        foreach ($order->get_items('tax') as $taxItemId => $taxItem) {
+            $order->remove_item((int) $taxItemId);
+        }
         $order->set_discount_total(0);
         $order->set_shipping_total(0);
-        $order->set_total_tax(0);
+        $order->set_cart_tax(0);
         $order->set_shipping_tax(0);
         $order->set_total(0);
 

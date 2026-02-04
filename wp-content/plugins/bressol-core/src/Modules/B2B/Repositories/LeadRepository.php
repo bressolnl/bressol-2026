@@ -31,6 +31,8 @@ final class LeadRepository
         'owner_user_id',
         'lead_score',
         'last_activity_at',
+        'sales_stage',
+        'next_followup_at',
         'consent_token',
         'consent_token_created_at',
         'consent_token_expires_at',
@@ -58,6 +60,8 @@ final class LeadRepository
         'owner_user_id' => '%d',
         'lead_score' => '%d',
         'last_activity_at' => '%s',
+        'sales_stage' => '%s',
+        'next_followup_at' => '%s',
         'consent_token' => '%s',
         'consent_token_created_at' => '%s',
         'consent_token_expires_at' => '%s',
@@ -205,6 +209,101 @@ final class LeadRepository
         return is_numeric($count) ? (int) $count : 0;
     }
 
+    /** @return array<string, int> */
+    public function count_temperature_stats(): array
+    {
+        global $wpdb;
+        $table = $this->table();
+        $eventsTable = $wpdb->prefix . 'bressol_b2b_lead_events';
+        $lastTypeSql = $this->last_event_type_sql('l', $eventsTable);
+
+        $hot = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$table} l
+                 WHERE (l.lead_score >= %d OR {$lastTypeSql} IN (%s, %s))",
+                35,
+                'pricelist_clicked',
+                'profile_completed'
+            )
+        );
+
+        $warm = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$table} l
+                 WHERE (l.lead_score >= %d OR {$lastTypeSql} = %s)
+                   AND NOT (l.lead_score >= %d OR {$lastTypeSql} IN (%s, %s))",
+                15,
+                'catalog_clicked',
+                35,
+                'pricelist_clicked',
+                'profile_completed'
+            )
+        );
+
+        $cold = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$table} l
+                 WHERE l.lead_score < %d
+                   AND ({$lastTypeSql} IS NULL OR {$lastTypeSql} NOT IN (%s, %s, %s))",
+                15,
+                'catalog_clicked',
+                'pricelist_clicked',
+                'profile_completed'
+            )
+        );
+
+        $cutoff = date('Y-m-d H:i:s', current_time('timestamp') - (14 * 86400));
+        $stale = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$table} l
+                 WHERE l.last_activity_at IS NOT NULL AND l.last_activity_at <= %s",
+                $cutoff
+            )
+        );
+
+        return [
+            'HOT' => $hot,
+            'WARM' => $warm,
+            'COLD' => $cold,
+            'stale' => $stale,
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function find_hot_leads(int $limit = 5): array
+    {
+        global $wpdb;
+        $table = $this->table();
+        $eventsTable = $wpdb->prefix . 'bressol_b2b_lead_events';
+        $tasksTable = $wpdb->prefix . 'bressol_b2b_tasks';
+        $lastTypeSql = $this->last_event_type_sql('l', $eventsTable);
+        $limit = max(1, $limit);
+
+        $sql = "SELECT l.* FROM {$table} l
+            WHERE (
+                l.lead_score >= %d
+                OR {$lastTypeSql} IN (%s, %s)
+                OR EXISTS (
+                    SELECT 1 FROM {$tasksTable} t
+                    WHERE t.lead_id = l.id AND t.type = %s AND t.status = %s
+                )
+            )
+            ORDER BY l.last_activity_at DESC, l.updated_at DESC
+            LIMIT %d";
+        $prepared = $wpdb->prepare(
+            $sql,
+            35,
+            'pricelist_clicked',
+            'profile_completed',
+            'hot_lead_call',
+            'open',
+            $limit
+        );
+        $rows = $wpdb->get_results($prepared, ARRAY_A);
+
+        return is_array($rows) ? $rows : [];
+    }
+
     /** @return array<int, array<string, mixed>> */
     public function find_for_reminder(string $cutoff, int $limit = 50): array
     {
@@ -283,6 +382,8 @@ final class LeadRepository
             'source_ref_event_id',
             'interests_json',
             'last_activity_at',
+            'sales_stage',
+            'next_followup_at',
             'consented_at',
             'reminder_sent_at',
         ];
@@ -311,6 +412,10 @@ final class LeadRepository
     {
         $clauses = [];
         $params = [];
+        global $wpdb;
+        $table = $this->table();
+        $eventsTable = $wpdb->prefix . 'bressol_b2b_lead_events';
+        $lastTypeSql = $this->last_event_type_sql($table, $eventsTable);
 
         if (!empty($filters['status'])) {
             $clauses[] = 'status = %s';
@@ -328,9 +433,50 @@ final class LeadRepository
             $clauses[] = 'owner_user_id = %d';
             $params[] = (int) $filters['owner_user_id'];
         }
+        if (!empty($filters['search'])) {
+            $search = strtolower(sanitize_text_field((string) $filters['search']));
+            $like = '%' . $wpdb->esc_like($search) . '%';
+            $clauses[] = '(email_lower LIKE %s OR company_name LIKE %s)';
+            $params[] = $like;
+            $params[] = $like;
+        }
+        if (!empty($filters['temperature'])) {
+            $temp = strtoupper(sanitize_key((string) $filters['temperature']));
+            if ($temp === 'HOT') {
+                $clauses[] = "(lead_score >= %d OR {$lastTypeSql} IN (%s, %s))";
+                $params[] = 35;
+                $params[] = 'pricelist_clicked';
+                $params[] = 'profile_completed';
+            } elseif ($temp === 'WARM') {
+                $clauses[] = "(lead_score >= %d OR {$lastTypeSql} = %s)
+                    AND NOT (lead_score >= %d OR {$lastTypeSql} IN (%s, %s))";
+                $params[] = 15;
+                $params[] = 'catalog_clicked';
+                $params[] = 35;
+                $params[] = 'pricelist_clicked';
+                $params[] = 'profile_completed';
+            } elseif ($temp === 'COLD') {
+                $clauses[] = "lead_score < %d
+                    AND ({$lastTypeSql} IS NULL OR {$lastTypeSql} NOT IN (%s, %s, %s))";
+                $params[] = 15;
+                $params[] = 'catalog_clicked';
+                $params[] = 'pricelist_clicked';
+                $params[] = 'profile_completed';
+            }
+        }
+        if (!empty($filters['stale_only'])) {
+            $cutoff = date('Y-m-d H:i:s', current_time('timestamp') - (14 * 86400));
+            $clauses[] = 'last_activity_at IS NOT NULL AND last_activity_at <= %s';
+            $params[] = $cutoff;
+        }
 
         $whereSql = $clauses ? 'WHERE ' . implode(' AND ', $clauses) : '';
 
         return [$whereSql, $params];
+    }
+
+    private function last_event_type_sql(string $leadTable, string $eventsTable): string
+    {
+        return "(SELECT type FROM {$eventsTable} e WHERE e.lead_id = {$leadTable}.id ORDER BY e.created_at DESC, e.id DESC LIMIT 1)";
     }
 }

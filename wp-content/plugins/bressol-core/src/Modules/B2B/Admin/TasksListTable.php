@@ -53,7 +53,23 @@ final class TasksListTable extends \WP_List_Table
         $items = $this->repository->find_by_filters($this->filters, $this->perPage, $page);
         $total = $this->repository->count_by_filters($this->filters);
 
-        $this->items = $items;
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $normalized[] = [
+                'id' => (int) ($item['id'] ?? 0),
+                'lead_id' => (int) ($item['lead_id'] ?? 0),
+                'type' => (string) ($item['type'] ?? ''),
+                'note' => (string) ($item['note'] ?? ''),
+                'assigned_user_id' => (int) ($item['assigned_user_id'] ?? 0),
+                'due_at' => (string) ($item['due_at'] ?? ''),
+                'status' => (string) ($item['status'] ?? ''),
+            ];
+        }
+
+        $this->items = $normalized;
         $this->set_pagination_args([
             'total_items' => $total,
             'per_page' => $this->perPage,
@@ -63,26 +79,59 @@ final class TasksListTable extends \WP_List_Table
     /** @param array<string, mixed> $item */
     public function column_default($item, $column_name): string
     {
-        switch ($column_name) {
-            case 'id':
-                return (string) ($item['id'] ?? '');
-            case 'lead_id':
-                return $this->render_lead_link((int) ($item['lead_id'] ?? 0));
-            case 'type':
-                return esc_html((string) ($item['type'] ?? ''));
-            case 'note':
-                return esc_html((string) ($item['note'] ?? ''));
-            case 'assigned_user_id':
-                return esc_html($this->user_label((int) ($item['assigned_user_id'] ?? 0)));
-            case 'due_at':
-                return esc_html((string) ($item['due_at'] ?? ''));
-            case 'status':
-                return esc_html((string) ($item['status'] ?? ''));
-            case 'actions':
-                return $this->render_actions((int) ($item['id'] ?? 0), (string) ($item['status'] ?? ''));
-            default:
-                return '';
+        $value = $item[$column_name] ?? '';
+        if (is_scalar($value)) {
+            return esc_html((string) $value);
         }
+        return '';
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_id($item): string
+    {
+        return esc_html((string) ($item['id'] ?? ''));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_lead_id($item): string
+    {
+        return $this->render_lead_link((int) ($item['lead_id'] ?? 0));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_type($item): string
+    {
+        return esc_html((string) ($item['type'] ?? ''));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_note($item): string
+    {
+        return esc_html((string) ($item['note'] ?? ''));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_assigned_user_id($item): string
+    {
+        return esc_html($this->user_label((int) ($item['assigned_user_id'] ?? 0)));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_due_at($item): string
+    {
+        return esc_html((string) ($item['due_at'] ?? ''));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_status($item): string
+    {
+        return esc_html((string) ($item['status'] ?? ''));
+    }
+
+    /** @param array<string, mixed> $item */
+    public function column_actions($item): string
+    {
+        return $this->render_actions((int) ($item['id'] ?? 0), (string) ($item['status'] ?? ''));
     }
 
     private function render_lead_link(int $leadId): string
@@ -102,17 +151,29 @@ final class TasksListTable extends \WP_List_Table
         if ($status === 'done') {
             return '';
         }
-        $url = add_query_arg(
-            [
-                'page' => 'bressol-b2b',
-                'tab' => 'tasks',
-                'b2b_task_action' => 'mark_done',
-                'task_id' => $taskId,
-                '_wpnonce' => wp_create_nonce('bressol_b2b_task_action'),
-            ],
-            admin_url('admin.php')
-        );
-        return '<a class="button button-small" href="' . esc_url($url) . '">Marcar done</a>';
+        $actionUrl = admin_url('admin.php?page=bressol-b2b&tab=tasks');
+        $html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+        $html .= '<form method="post" action="' . esc_url($actionUrl) . '">';
+        $html .= wp_nonce_field('bressol_b2b_task_action', '_wpnonce', true, false);
+        $html .= '<input type="hidden" name="b2b_task_action" value="mark_done" />';
+        $html .= '<input type="hidden" name="task_id" value="' . esc_attr((string) $taskId) . '" />';
+        $html .= '<button class="button button-small" type="submit">Completar</button>';
+        $html .= '</form>';
+        $html .= '<form method="post" action="' . esc_url($actionUrl) . '">';
+        $html .= wp_nonce_field('bressol_b2b_task_action', '_wpnonce', true, false);
+        $html .= '<input type="hidden" name="b2b_task_action" value="snooze_24h" />';
+        $html .= '<input type="hidden" name="task_id" value="' . esc_attr((string) $taskId) . '" />';
+        $html .= '<button class="button button-small" type="submit">Snooze 24h</button>';
+        $html .= '</form>';
+        $html .= '<form method="post" action="' . esc_url($actionUrl) . '">';
+        $html .= wp_nonce_field('bressol_b2b_task_action', '_wpnonce', true, false);
+        $html .= '<input type="hidden" name="b2b_task_action" value="update_note" />';
+        $html .= '<input type="hidden" name="task_id" value="' . esc_attr((string) $taskId) . '" />';
+        $html .= '<input type="text" name="task_note" maxlength="140" placeholder="Nota" style="max-width:160px;" />';
+        $html .= '<button class="button button-small" type="submit">Guardar nota</button>';
+        $html .= '</form>';
+        $html .= '</div>';
+        return $html;
     }
 
     private function user_label(int $userId): string

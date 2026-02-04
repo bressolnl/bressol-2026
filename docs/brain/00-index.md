@@ -38,6 +38,7 @@ Costes, margenes y control de perdidas
 - `docs/brain/modules/19-markets-events-calendar.md`
 - `docs/brain/modules/20-seo-pdp.md`
 - `docs/brain/modules/21-purchasing.md`
+- `docs/brain/modules/22-forecasting.md`
 
 5) Theme
 - `docs/brain/theme/00-bressol-theme.md`

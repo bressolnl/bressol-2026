@@ -1,16 +1,222 @@
 @layer components {
-    .bressol-site-header {
-        position: sticky;
+    .bressol-header {
+        position: fixed;
         top: 0;
-        z-index: 50;
+        left: 0;
+        right: 0;
+        z-index: 80;
+        height: 80px;
         background: transparent;
-        transition: background var(--bressol-duration-med) var(--bressol-ease),
-            box-shadow var(--bressol-duration-med) var(--bressol-ease);
+        color: rgba(246, 242, 232, 0.95);
+        transition: background 220ms var(--bressol-ease),
+            color 220ms var(--bressol-ease),
+            border-color 220ms var(--bressol-ease);
     }
 
-    .bressol-site-header--solid {
+    .bressol-header.is-scrolled {
         background: var(--bressol-ivory);
-        box-shadow: var(--bressol-shadow-sm);
+        color: var(--bressol-ink);
+        border-bottom: 1px solid rgba(188, 175, 74, 0.25);
+    }
+
+    .bressol-header__inner {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 64px;
+        height: 100%;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+    }
+
+    .bressol-header__logo {
+        font-family: var(--bressol-font-serif);
+        letter-spacing: 0.22em;
+        font-size: 1.05rem;
+        color: var(--bressol-gold);
+        text-decoration: none;
+    }
+
+    .bressol-header a,
+    .bressol-header button {
+        color: inherit;
+    }
+
+    .bressol-header__nav {
+        justify-self: center;
+    }
+
+    .bressol-header__nav-list {
+        display: flex;
+        gap: 26px;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        font-weight: 500;
+        font-family: var(--bressol-font-sans);
+    }
+
+    .bressol-header__nav-link {
+        position: relative;
+        padding-bottom: 4px;
+        transition: color 180ms var(--bressol-ease);
+    }
+
+    .bressol-header__nav-link::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 1px;
+        background: currentColor;
+        opacity: 0;
+        transition: opacity 180ms var(--bressol-ease);
+    }
+
+    .bressol-header__nav-link:hover::after,
+    .bressol-header__nav-link:focus-visible::after {
+        opacity: 0.55;
+    }
+
+    .bressol-header__actions {
+        justify-self: end;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .bressol-header__icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+        border: 1px solid rgba(246, 242, 232, 0.4);
+        background: transparent;
+        transition: border-color 180ms var(--bressol-ease);
+    }
+
+    .bressol-header.is-scrolled .bressol-header__icon {
+        border-color: rgba(7, 12, 12, 0.2);
+    }
+
+    .bressol-header__badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        background: var(--bressol-gold);
+        color: var(--bressol-ink);
+        font-size: 0.7rem;
+        font-weight: 600;
+        margin-left: -8px;
+    }
+
+    .bressol-header__burger {
+        display: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+        border: 1px solid rgba(246, 242, 232, 0.4);
+        background: transparent;
+        color: inherit;
+    }
+
+    .bressol-drawer__overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(7, 12, 12, 0.45);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 220ms var(--bressol-ease);
+        z-index: 70;
+    }
+
+    .bressol-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100%;
+        width: min(320px, 84vw);
+        background: var(--bressol-ivory);
+        transform: translateX(100%);
+        transition: transform 250ms var(--bressol-ease);
+        z-index: 90;
+        padding: 24px;
+        display: grid;
+        gap: 24px;
+    }
+
+    .bressol-drawer__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .bressol-drawer__close {
+        background: transparent;
+        border: 1px solid rgba(7, 12, 12, 0.2);
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 1.4rem;
+        color: var(--bressol-ink);
+    }
+
+    .bressol-drawer__nav {
+        display: grid;
+        gap: 14px;
+    }
+
+    .bressol-drawer__link {
+        color: var(--bressol-ink);
+        font-size: 1.05rem;
+        font-weight: 500;
+        text-decoration: none;
+    }
+
+    .bressol-drawer__link:hover,
+    .bressol-drawer__link:focus-visible {
+        color: var(--bressol-gold);
+    }
+
+    .bressol-drawer-open .bressol-drawer {
+        transform: translateX(0);
+    }
+
+    .bressol-drawer-open .bressol-drawer__overlay {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .bressol-drawer-open {
+        overflow: hidden;
+    }
+
+    @media (max-width: 900px) {
+        .bressol-header {
+            height: 64px;
+        }
+
+        .bressol-header__inner {
+            padding: 0 24px;
+            grid-template-columns: auto 1fr auto;
+        }
+
+        .bressol-header__nav {
+            display: none;
+        }
+
+        .bressol-header__burger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
     }
 
     .bressol-home .bressol-button {

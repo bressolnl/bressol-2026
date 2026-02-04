@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const toggleHeader = () => {
-        header.classList.toggle('bressol-site-header--solid', window.scrollY > 16);
+        header.classList.toggle('is-scrolled', window.scrollY >= 60);
     };
 
     toggleHeader();

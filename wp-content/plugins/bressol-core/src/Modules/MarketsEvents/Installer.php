@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 final class Installer
 {
-    public const VERSION = '1.0.0';
+    public const VERSION = '1.1.0';
     private const VERSION_OPTION = 'bressol_markets_events_schema_version';
 
     public static function maybe_upgrade(): void
@@ -27,10 +27,10 @@ final class Installer
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
         $charsetCollate = $wpdb->get_charset_collate();
-        $table = $wpdb->prefix . 'bressol_events';
-
         $tables = [];
-        $tables[] = Schema::events_table_sql($table, $charsetCollate);
+        $tables[] = Schema::events_table_sql($wpdb->prefix . 'bressol_events', $charsetCollate);
+        $tables[] = Schema::event_documents_table_sql($wpdb->prefix . 'bressol_event_documents', $charsetCollate);
+        $tables[] = Schema::event_cost_items_table_sql($wpdb->prefix . 'bressol_event_cost_items', $charsetCollate);
 
         foreach ($tables as $tableSql) {
             dbDelta($tableSql);

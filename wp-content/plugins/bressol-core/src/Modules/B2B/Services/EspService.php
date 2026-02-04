@@ -29,7 +29,7 @@ final class EspService
         if ($listId <= 0) {
             return false;
         }
-        $subject = 'Bressol B2B: catalogus & prijslijst';
+        $subject = 'Bressol B2B — catalogus & prijslijst';
         $body = $this->build_email_body($token);
 
         $wpdb->insert(
@@ -152,16 +152,22 @@ final class EspService
 
     private function build_email_body(string $token): string
     {
-        $catalogUrl = add_query_arg(['token' => $token], home_url('/b2b/catalog'));
-        $pricelistUrl = add_query_arg(['token' => $token], home_url('/b2b/pricelist'));
+        $utm = [
+            'utm_source' => 'b2b',
+            'utm_medium' => 'email',
+            'utm_campaign' => 'catalog_2026',
+        ];
+        $catalogUrl = $this->build_public_url('catalog', $token, $utm);
+        $pricelistUrl = $this->build_public_url('pricelist', $token, $utm);
 
         $html = '';
-        $html .= '<p>Bedankt voor je toestemming om onze B2B-informatie te ontvangen.</p>';
-        $html .= '<p>Hier vind je de catalogus en prijslijst:</p>';
+        $html .= '<p>Bedankt voor je interesse in Bressol B2B.</p>';
+        $html .= '<p>Bekijk direct:</p>';
         $html .= '<ul>';
-        $html .= '<li><a href="' . esc_url($catalogUrl) . '">Catalogus downloaden</a></li>';
-        $html .= '<li><a href="' . esc_url($pricelistUrl) . '">Prijslijst downloaden</a></li>';
+        $html .= '<li><a href="' . esc_url($catalogUrl) . '">Catalogus bekijken</a></li>';
+        $html .= '<li><a href="' . esc_url($pricelistUrl) . '">Prijslijst bekijken</a></li>';
         $html .= '</ul>';
+        $html .= '<p>De prijslijst kan om bedrijfsnaam en stad vragen zodat we je beter kunnen helpen.</p>';
         $html .= '<p>Met vriendelijke groet,<br/>Bressol</p>';
 
         return $html;
@@ -169,8 +175,8 @@ final class EspService
 
     private function build_email_body_reminder(string $token): string
     {
-        $catalogUrl = add_query_arg(['token' => $token], home_url('/b2b/catalog'));
-        $pricelistUrl = add_query_arg(['token' => $token], home_url('/b2b/pricelist'));
+        $catalogUrl = $this->build_public_url('catalog', $token, []);
+        $pricelistUrl = $this->build_public_url('pricelist', $token, []);
 
         $html = '';
         $html .= '<p>We wilden je even herinneren aan onze B2B catalogus en prijslijst.</p>';
@@ -185,8 +191,8 @@ final class EspService
 
     private function build_email_body_profile_confirmation(string $token): string
     {
-        $catalogUrl = add_query_arg(['token' => $token], home_url('/b2b/catalog'));
-        $pricelistUrl = add_query_arg(['token' => $token], home_url('/b2b/pricelist'));
+        $catalogUrl = $this->build_public_url('catalog', $token, []);
+        $pricelistUrl = $this->build_public_url('pricelist', $token, []);
 
         $html = '';
         $html .= '<p>Bedankt voor het aanvullen van je bedrijfsgegevens.</p>';
@@ -252,5 +258,25 @@ final class EspService
         );
 
         return $listId;
+    }
+
+    /** @param array<string, string> $utm */
+    private function build_public_url(string $page, string $token, array $utm): string
+    {
+        if ($this->rewrites_ok()) {
+            $base = home_url('/b2b/' . $page);
+        } else {
+            $base = add_query_arg(['b2b_doc' => $page], home_url('/'));
+        }
+        $args = array_merge(['token' => $token], $utm);
+        return add_query_arg($args, $base);
+    }
+
+    private function rewrites_ok(): bool
+    {
+        $rules = get_option('rewrite_rules', []);
+        return is_array($rules)
+            && array_key_exists('^b2b/catalog/?$', $rules)
+            && array_key_exists('^b2b/pricelist/?$', $rules);
     }
 }

@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 final class Installer
 {
-    public const VERSION = '1.0.0';
+    public const VERSION = '1.1.0';
     private const VERSION_OPTION = 'bressol_pos_schema_version';
 
     public static function maybe_upgrade(): void
@@ -31,6 +31,7 @@ final class Installer
         $tables = [];
         $tables[] = Schema::opened_items_table_sql($wpdb->prefix . 'bressol_opened_items', $charsetCollate);
         $tables[] = Schema::opened_item_events_table_sql($wpdb->prefix . 'bressol_opened_item_events', $charsetCollate);
+        $tables[] = Schema::bundle_picks_table_sql($wpdb->prefix . 'bressol_pos_bundle_picks', $charsetCollate);
 
         foreach ($tables as $tableSql) {
             dbDelta($tableSql);

@@ -1,20 +1,88 @@
 @layer sections {
+    .bressol-home .bressol-trust {
+        background: #f3ede2;
+        padding: 28px 0;
+        border-top: 1px solid rgba(188, 175, 74, 0.18);
+    }
+
+    .bressol-home .bressol-trust__inner {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 0 56px;
+    }
+
     .bressol-home .bressol-trust__list {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 16px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px 28px;
         padding: 0;
         margin: 0;
         list-style: none;
-        font-size: 0.95rem;
-        color: var(--bressol-ink-70);
+        align-items: center;
     }
 
     .bressol-home .bressol-trust__item {
-        padding: 12px 16px;
-        border-radius: var(--bressol-radius-sm);
-        background: #fff;
-        border: 1px solid var(--bressol-ink-10);
-        text-align: center;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        color: rgba(7, 12, 12, 0.78);
+        font-size: 0.92rem;
+        font-weight: 450;
+        letter-spacing: 0.2px;
+    }
+
+    .bressol-home .bressol-trust__link {
+        display: inline-flex;
+        align-items: center;
+        gap: 15px;
+        color: inherit;
+        text-decoration: none;
+        transition: color 200ms var(--bressol-ease);
+        padding-bottom: 2px;
+        border-bottom: 1px solid transparent;
+    }
+
+    .bressol-home .bressol-trust__link:hover {
+        color: var(--bressol-gold);
+        border-bottom-color: rgba(188, 175, 74, 0.45);
+    }
+
+    .bressol-home .bressol-trust__link:focus-visible {
+        outline: 2px solid rgba(188, 175, 74, 0.35);
+        outline-offset: 3px;
+        border-bottom-color: rgba(188, 175, 74, 0.45);
+    }
+
+    .bressol-home .bressol-trust__icon {
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(7, 12, 12, 0.7);
+        transition: color 200ms var(--bressol-ease);
+    }
+
+    .bressol-home .bressol-trust__link:hover .bressol-trust__icon {
+        color: var(--bressol-gold);
+    }
+
+    .bressol-home .bressol-trust__text {
+        line-height: 1.4;
+    }
+
+    @media (max-width: 900px) {
+        .bressol-home .bressol-trust__inner {
+            padding: 0 20px;
+        }
+
+        .bressol-home .bressol-trust__list {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            row-gap: 22px;
+        }
+
+        .bressol-home .bressol-trust {
+            padding: 22px 0;
+        }
     }
 }

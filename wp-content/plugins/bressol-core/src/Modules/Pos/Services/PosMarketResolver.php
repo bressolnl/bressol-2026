@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bressol\Modules\Pos\Services;
 
 use Bressol\Modules\MarketsEvents\Repositories\EventRepository;
+use Bressol\Modules\MarketsEvents\Services\PosEventEligibilityService;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -13,11 +14,17 @@ final class PosMarketResolver
 {
     private PosSettings $settings;
     private EventRepository $eventRepository;
+    private PosEventEligibilityService $eligibilityService;
 
-    public function __construct(?PosSettings $settings = null, ?EventRepository $eventRepository = null)
+    public function __construct(
+        ?PosSettings $settings = null,
+        ?EventRepository $eventRepository = null,
+        ?PosEventEligibilityService $eligibilityService = null
+    )
     {
         $this->settings = $settings ?? new PosSettings();
         $this->eventRepository = $eventRepository ?? new EventRepository();
+        $this->eligibilityService = $eligibilityService ?? new PosEventEligibilityService($this->eventRepository);
     }
 
     /** @return array{kind:'event', market_id:string, market_name:string, event_id:int} */
@@ -38,10 +45,8 @@ final class PosMarketResolver
             throw new \InvalidArgumentException('event not found');
         }
 
-        $status = (string) ($event['status'] ?? '');
-        $channels = (string) ($event['channels'] ?? '');
-        if ($status !== 'confirmed' || !in_array($channels, ['pos', 'both'], true)) {
-            throw new \InvalidArgumentException('event not allowed');
+        if (!$this->eligibilityService->is_event_eligible_for_pos($event)) {
+            throw new \InvalidArgumentException('event not eligible');
         }
 
         $title = trim((string) ($event['title'] ?? ''));

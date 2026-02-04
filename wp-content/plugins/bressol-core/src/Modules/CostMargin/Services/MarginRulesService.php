@@ -114,6 +114,24 @@ final class MarginRulesService
         ];
     }
 
+    public function get_expiry_discount_pct(int $days): int
+    {
+        if ($days <= 0) {
+            return 25;
+        }
+
+        $defaults = [
+            45 => 25,
+            21 => 50,
+            7 => 75,
+        ];
+        $raw = get_option('bressol_margin_rules', []);
+        $options = is_array($raw) ? $raw : [];
+        $steps = $this->normalize_expiry_steps($options['expiry_discount_steps'] ?? null, $defaults);
+
+        return $this->resolve_expiry_discount($days, $steps);
+    }
+
     /** @param array<int, array<string, mixed>> $items
      *  @param array<string, mixed> $context
      *  @return array{status:string,violations:array<int, array<string, mixed>>,computed:array<string, mixed>}

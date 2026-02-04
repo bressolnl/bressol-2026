@@ -24,6 +24,28 @@ Campos clave:
 Indices minimos: `status`, `type`, `start_at`, `channels`.
 Versionado schema: `bressol_markets_events_schema_version`.
 
+### Event Documents
+Tabla: `wp_bressol_event_documents`.
+Campos:
+- `event_id` (FK logica al evento)
+- `attachment_id` (Media Library)
+- `title`, `mime_type`, `file_url`
+- `created_at`
+
+### Event Cost Items
+Tabla: `wp_bressol_event_cost_items`.
+Campos:
+- `event_id`
+- `category` enum: booth_fee, reservation, parking, hotel, fuel, tolls, supplies, refund, correction, other
+- `amount_cents` (puede ser negativo para refunds/corrections)
+- `incurred_at` (DATE)
+- `note` (sin PII)
+- `event_document_id` (opcional, referencia a documento)
+- `created_at`
+
+UI Admin:
+- Editar evento incluye secciones Documents y Cost items.
+
 ## Contratos de servicios (PR1)
 Repositorio (`EventRepository`):
 - `find_by_id(int $id): ?array`

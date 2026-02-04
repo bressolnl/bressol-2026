@@ -44,6 +44,7 @@ final class MarginAuditService
                 $missingCost = false;
             } else {
                 $missingCost = true;
+                $cogsSource = 'pending';
             }
         }
 

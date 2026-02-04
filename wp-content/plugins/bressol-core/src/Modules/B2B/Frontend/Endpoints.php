@@ -17,6 +17,7 @@ final class Endpoints
     private const CONSENT_THROTTLE_SECONDS = 60;
     private const SIGNUP_THROTTLE_SECONDS = 60;
     private const PROFILE_THROTTLE_SECONDS = 60;
+    private const VIEW_THROTTLE_MINUTES = 10;
     private const GENERIC_ERROR = 'Deze link is ongeldig of verlopen.';
 
     private LeadRepository $leads;
@@ -43,12 +44,21 @@ final class Endpoints
     public function register_query_vars(array $vars): array
     {
         $vars[] = 'bressol_b2b';
+        $vars[] = 'b2b_doc';
         return $vars;
     }
 
     public function handle_request(): void
     {
         $page = get_query_var('bressol_b2b');
+        if (!in_array($page, ['catalog', 'pricelist', 'signup'], true)) {
+            $fallback = get_query_var('b2b_doc');
+            if (in_array($fallback, ['catalog', 'pricelist'], true)) {
+                $page = $fallback;
+            } else {
+                return;
+            }
+        }
         if (!in_array($page, ['catalog', 'pricelist', 'signup'], true)) {
             return;
         }
@@ -95,6 +105,10 @@ final class Endpoints
         $download = isset($_GET['download']) ? sanitize_key((string) wp_unslash($_GET['download'])) : '';
         $attemptDownload = $this->is_get_request() && $download === '1';
 
+        if ($this->is_get_request() && !$attemptDownload) {
+            $this->track_view((int) ($lead['id'] ?? 0), $page);
+        }
+
         $profileJustCompleted = false;
         $profileErrors = [];
         if ($page === 'pricelist' && $consented && $this->is_profile_submission()) {
@@ -121,16 +135,15 @@ final class Endpoints
 
         $shouldPromptProfile = $page === 'pricelist'
             && $consented
-            && !$this->leadService->is_profile_complete($lead)
-            && ($attemptDownload || $this->events->has_event((int) $lead['id'], 'pricelist_clicked'));
+            && !$this->leadService->is_profile_complete($lead);
+
+        if ($attemptDownload && $page === 'pricelist' && $consented && $shouldPromptProfile) {
+            $profileErrors[] = 'Vul eerst bedrijfsnaam en stad in.';
+        }
 
         if ($attemptDownload && $consented && !$shouldPromptProfile) {
             $this->handle_download($page, (int) $lead['id']);
             return;
-        }
-
-        if ($attemptDownload && $page === 'pricelist' && $consented && $shouldPromptProfile) {
-            $this->leadService->register_pricelist_click((int) $lead['id']);
         }
 
         $this->render_page(
@@ -146,12 +159,29 @@ final class Endpoints
         );
     }
 
+    /** @param array<string, mixed> $atts */
+    public function render_signup_shortcode(array $atts = []): string
+    {
+        $result = $this->handle_signup_submission();
+        return $this->build_signup_html(
+            $result['success'],
+            $result['errors'],
+            $result['lead_id'],
+            $result['token'],
+            false
+        );
+    }
+
     private function handle_download(string $page, int $leadId): void
     {
         [$path, $filename, $eventName] = $this->get_pdf_info($page);
         if ($path === '' || !file_exists($path) || !is_readable($path)) {
+            if ($leadId > 0) {
+                $this->events->insert_event($leadId, 'pdf_missing', ['which' => $page]);
+            }
             error_log('B2B PDF missing: ' . $page);
-            $this->render_error('Het bestand is niet beschikbaar.');
+            $code = $page === 'catalog' ? 'B2B-PDF-MISSING-CATALOG' : 'B2B-PDF-MISSING-PRICELIST';
+            $this->render_branded_error('Document niet beschikbaar', 'Het document is tijdelijk niet beschikbaar.', $code);
             return;
         }
 
@@ -193,23 +223,48 @@ final class Endpoints
         nocache_headers();
 
         $title = $page === 'catalog' ? 'B2B Catalogus' : 'B2B Prijslijst';
-        $downloadUrl = add_query_arg(['token' => $token, 'download' => '1'], home_url('/b2b/' . $page));
+        $downloadUrl = $this->build_public_url($page, $token, true);
+        $secondaryPage = $page === 'catalog' ? 'pricelist' : 'catalog';
+        $secondaryLabel = $page === 'catalog' ? 'Ga naar prijslijst' : 'Ga naar catalogus';
+        $secondaryUrl = $this->build_public_url($secondaryPage, $token, false);
         $eventName = $page === 'catalog' ? 'b2b_catalog_clicked' : 'b2b_pricelist_clicked';
 
-        echo '<!doctype html><html><head><meta charset="utf-8"><title>' . esc_html($title) . '</title></head><body>';
-        echo '<div style="max-width:640px;margin:40px auto;font-family:Arial, sans-serif;">';
-        echo '<h1>' . esc_html($title) . '</h1>';
+        echo '<!doctype html><html><head><meta charset="utf-8"><title>' . esc_html($title) . '</title>';
+        echo '<style>
+            body{margin:0;font-family:Arial,sans-serif;background:#0f0f0f;color:#f5f5f5;}
+            .b2b-wrap{max-width:760px;margin:48px auto;padding:0 20px;}
+            .b2b-card{background:#151515;border:1px solid #2b2b2b;border-radius:16px;padding:28px;}
+            .b2b-title{margin:0 0 12px;font-size:28px;letter-spacing:0.2px;}
+            .b2b-sub{color:#d1b35a;margin:0 0 16px;font-weight:600;}
+            .b2b-list{margin:0 0 18px;padding-left:18px;color:#e6e6e6;}
+            .b2b-cta{display:inline-block;background:#d1b35a;color:#111;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:700;}
+            .b2b-secondary{display:inline-block;margin-left:12px;color:#d1b35a;text-decoration:none;}
+            .b2b-note{font-size:13px;color:#c8c8c8;margin-top:14px;line-height:1.4;}
+            .b2b-divider{border:0;border-top:1px solid #2b2b2b;margin:22px 0;}
+            .b2b-input{width:100%;max-width:420px;padding:8px;border-radius:8px;border:1px solid #444;background:#101010;color:#f5f5f5;}
+            .b2b-btn{background:#d1b35a;color:#111;border:0;border-radius:8px;padding:8px 14px;font-weight:700;}
+            .b2b-alert{color:#ffb4b4;margin:10px 0;}
+        </style></head><body>';
+        echo '<div class="b2b-wrap"><div class="b2b-card">';
+        echo '<p class="b2b-sub">Bressol B2B</p>';
+        echo '<h1 class="b2b-title">' . esc_html($title) . '</h1>';
+        echo '<ul class="b2b-list">';
+        echo '<li>Seizoenscollecties met betrouwbare beschikbaarheid.</li>';
+        echo '<li>Snelle follow-up door ons sales team.</li>';
+        echo '<li>Heldere prijzen en logistieke afspraken.</li>';
+        echo '</ul>';
 
         if (!$consented) {
             echo '<p>Om de B2B documenten te ontvangen vragen we je om expliciete toestemming.</p>';
             echo '<form method="post">';
             wp_nonce_field('bressol_b2b_consent');
             echo '<label><input type="checkbox" name="consent" value="1" required> Ik geef toestemming om marketinginformatie van Bressol te ontvangen.</label>';
-            echo '<p><button type="submit" name="bressol_b2b_consent_submit">Toestemming geven</button></p>';
+            echo '<p><button class="b2b-btn" type="submit" name="bressol_b2b_consent_submit">Toestemming geven</button></p>';
             echo '</form>';
-        } else {
+        } elseif (!$showProfileForm) {
             echo '<p>Je kunt de documenten hieronder downloaden.</p>';
-            echo '<p><a class="b2b-download" data-event="' . esc_attr($eventName) . '" href="' . esc_url($downloadUrl) . '">Download PDF</a></p>';
+            echo '<p><a class="b2b-download b2b-cta" data-event="' . esc_attr($eventName) . '" href="' . esc_url($downloadUrl) . '">Download PDF</a>';
+            echo '<a class="b2b-secondary" href="' . esc_url($secondaryUrl) . '">' . esc_html($secondaryLabel) . '</a></p>';
         }
 
         if ($consentJustGiven) {
@@ -220,26 +275,35 @@ final class Endpoints
         }
 
         if ($showProfileForm) {
-            echo '<hr style="margin:24px 0;" />';
+            echo '<hr class="b2b-divider" />';
             echo '<h2>Bedrijfsgegevens aanvullen</h2>';
-            echo '<p>Om je aanvraag beter te verwerken vragen we nog een paar gegevens.</p>';
+            echo '<p>Voor een betere service vragen we bedrijfsnaam en stad.</p>';
             if ($profileErrors !== []) {
-                echo '<div style="color:#b32d2e;">' . esc_html(implode(' ', $profileErrors)) . '</div>';
+                echo '<div class="b2b-alert">' . esc_html(implode(' ', $profileErrors)) . '</div>';
             }
             echo '<form method="post">';
             wp_nonce_field('bressol_b2b_profile');
-            echo '<p><label>Bedrijf *</label><br/><input type="text" name="company_name" required value="'
+            echo '<p><label>Bedrijf *</label><br/><input class="b2b-input" type="text" name="company_name" required value="'
                 . esc_attr((string) ($lead['company_name'] ?? '')) . '" /></p>';
-            echo '<p><label>Stad / locatie *</label><br/><input type="text" name="city" required value="'
+            echo '<p><label>Stad / locatie *</label><br/><input class="b2b-input" type="text" name="city" required value="'
                 . esc_attr((string) ($lead['city'] ?? '')) . '" /></p>';
-            echo '<p><label>Telefoon</label><br/><input type="text" name="phone" value="'
-                . esc_attr((string) ($lead['phone'] ?? '')) . '" /></p>';
-            echo '<p><button type="submit" name="bressol_b2b_profile_submit">Opslaan</button></p>';
+            echo '<p><button class="b2b-btn" type="submit" name="bressol_b2b_profile_submit">Opslaan</button></p>';
             echo '</form>';
         }
-        echo '</div>';
+        echo '<p class="b2b-note">Privacy: geen gevoelige gegevens in deze pagina of tracking. Alleen interne IDs.</p>';
+        if ($page === 'catalog') {
+            echo '<p class="b2b-note">De prijslijst kan om bedrijfsnaam en stad vragen om je beter te helpen.</p>';
+        }
+        if ($page === 'pricelist') {
+            echo '<p class="b2b-note">We vragen bedrijfsnaam en stad om je aanvraag sneller te verwerken.</p>';
+        }
+        echo '</div></div>';
+        $utmMedium = isset($_GET['utm_medium']) ? sanitize_key((string) wp_unslash($_GET['utm_medium'])) : '';
+        $source = $utmMedium === 'email' ? 'email' : 'direct';
+        $viewEvent = $page === 'catalog' ? 'b2b_catalog_view' : 'b2b_pricelist_view';
         echo '<script>
             window.dataLayer = window.dataLayer || [];
+            window.dataLayer.push({event:"' . esc_js($viewEvent) . '", lead_id:' . (int) $leadId . ', source:"' . esc_js($source) . '"});
             document.addEventListener("click", function(e) {
                 var link = e.target.closest(".b2b-download");
                 if (!link) return;
@@ -247,7 +311,7 @@ final class Endpoints
                 window.dataLayer.push({
                     event: link.dataset.event || "b2b_download",
                     lead_id: ' . (int) $leadId . ',
-                    source: "b2b"
+                    source: "' . esc_js($source) . '"
                 });
                 window.location.href = link.href;
             }, {capture: true});
@@ -259,7 +323,31 @@ final class Endpoints
         exit;
     }
 
+    private function track_view(int $leadId, string $page): void
+    {
+        if ($leadId <= 0 || !in_array($page, ['catalog', 'pricelist'], true)) {
+            return;
+        }
+        $event = $page === 'catalog' ? 'catalog_view' : 'pricelist_view';
+        $recent = $this->events->has_recent_event_minutes($leadId, $event, self::VIEW_THROTTLE_MINUTES);
+        if ($recent) {
+            return;
+        }
+        $this->events->insert_event($leadId, $event, []);
+        $this->leads->update($leadId, [
+            'last_activity_at' => current_time('mysql'),
+            'updated_at' => current_time('mysql'),
+        ]);
+    }
+
     private function handle_signup_request(): void
+    {
+        $result = $this->handle_signup_submission();
+        $this->render_signup_page($result['success'], $result['errors'], $result['lead_id'], $result['token']);
+    }
+
+    /** @return array{success:bool,errors:array<int,string>,lead_id:int,token:string} */
+    private function handle_signup_submission(): array
     {
         $success = false;
         $errors = [];
@@ -268,8 +356,7 @@ final class Endpoints
 
         if ($this->is_signup_submission()) {
             if (!$this->verify_signup_nonce()) {
-                $this->render_error(self::GENERIC_ERROR);
-                return;
+                return ['success' => false, 'errors' => [self::GENERIC_ERROR], 'lead_id' => 0, 'token' => ''];
             }
 
             $payload = $this->get_signup_payload($_POST);
@@ -303,7 +390,7 @@ final class Endpoints
             }
         }
 
-        $this->render_signup_page($success, $errors, $leadId, $token);
+        return ['success' => $success, 'errors' => $errors, 'lead_id' => $leadId, 'token' => $token];
     }
 
     /** @param array<int, string> $errors */
@@ -311,44 +398,55 @@ final class Endpoints
     {
         status_header(200);
         nocache_headers();
+        echo $this->build_signup_html($success, $errors, $leadId, $token, true);
+        exit;
+    }
 
+    /** @param array<int, string> $errors */
+    private function build_signup_html(bool $success, array $errors, int $leadId, string $token, bool $fullPage): string
+    {
         $title = 'B2B aanmelden';
-        $catalogUrl = $token !== '' ? add_query_arg(['token' => $token], home_url('/b2b/catalog')) : '';
-        $pricelistUrl = $token !== '' ? add_query_arg(['token' => $token], home_url('/b2b/pricelist')) : '';
+        $catalogUrl = $token !== '' ? add_query_arg(['token' => $token, 'created' => '1'], home_url('/b2b/catalog')) : '';
+        $pricelistUrl = $token !== '' ? add_query_arg(['token' => $token, 'created' => '1'], home_url('/b2b/pricelist')) : '';
 
-        echo '<!doctype html><html><head><meta charset="utf-8"><title>' . esc_html($title) . '</title></head><body>';
-        echo '<div style="max-width:640px;margin:40px auto;font-family:Arial, sans-serif;">';
-        echo '<h1>' . esc_html($title) . '</h1>';
+        $html = '';
+        if ($fullPage) {
+            $html .= '<!doctype html><html><head><meta charset="utf-8"><title>' . esc_html($title) . '</title></head><body>';
+        }
+        $html .= '<div style="max-width:640px;margin:40px auto;font-family:Arial, sans-serif;">';
+        $html .= '<h1>' . esc_html($title) . '</h1>';
 
         if ($success) {
-            echo '<p><strong>Bedankt! Je aanmelding is ontvangen.</strong></p>';
+            $html .= '<p><strong>Bedankt! Je aanmelding is ontvangen.</strong></p>';
             if ($catalogUrl !== '' && $pricelistUrl !== '') {
-                echo '<p>Je kunt de documenten hieronder bekijken:</p>';
-                echo '<ul>';
-                echo '<li><a href="' . esc_url($catalogUrl) . '">Catalogus downloaden</a></li>';
-                echo '<li><a href="' . esc_url($pricelistUrl) . '">Prijslijst downloaden</a></li>';
-                echo '</ul>';
+                $html .= '<p>Je kunt de documenten hieronder bekijken:</p>';
+                $html .= '<ul>';
+                $html .= '<li><a href="' . esc_url($catalogUrl) . '">Catalogus downloaden</a></li>';
+                $html .= '<li><a href="' . esc_url($pricelistUrl) . '">Prijslijst downloaden</a></li>';
+                $html .= '</ul>';
             }
         } else {
             if ($errors !== []) {
-                echo '<div style="color:#b32d2e;">' . esc_html(implode(' ', $errors)) . '</div>';
+                $html .= '<div style="color:#b32d2e;">' . esc_html(implode(' ', $errors)) . '</div>';
             }
-            echo '<form method="post">';
-            wp_nonce_field('bressol_b2b_signup');
-            echo '<p><label>Email *</label><br/><input type="email" name="email" required /></p>';
-            echo '<p><label>Type bedrijf</label><br/>' . $this->render_business_type_select('business_type') . '</p>';
-            echo '<p><label><input type="checkbox" name="consent" value="1" required> Ik geef toestemming om marketinginformatie van Bressol te ontvangen.</label></p>';
-            echo '<p><button type="submit" name="bressol_b2b_signup_submit">Aanmelden</button></p>';
-            echo '</form>';
+            $html .= '<form method="post">';
+            $html .= wp_nonce_field('bressol_b2b_signup', '_wpnonce', true, false);
+            $html .= '<p><label>Email *</label><br/><input type="email" name="email" required /></p>';
+            $html .= '<p><label>Type bedrijf</label><br/>' . $this->render_business_type_select('business_type') . '</p>';
+            $html .= '<p><label><input type="checkbox" name="consent" value="1" required> Ik geef toestemming om marketinginformatie van Bressol te ontvangen.</label></p>';
+            $html .= '<p><button type="submit" name="bressol_b2b_signup_submit">Aanmelden</button></p>';
+            $html .= '</form>';
         }
 
-        echo '</div>';
+        $html .= '</div>';
         if ($success) {
-            echo '<script>window.dataLayer = window.dataLayer || [];';
-            echo 'window.dataLayer.push({event:"b2b_signup_submitted", lead_id:' . (int) $leadId . ', source:"b2b"});</script>';
+            $html .= '<script>window.dataLayer = window.dataLayer || [];';
+            $html .= 'window.dataLayer.push({event:"b2b_signup_submitted", lead_id:' . (int) $leadId . ', source:"b2b"});</script>';
         }
-        echo '</body></html>';
-        exit;
+        if ($fullPage) {
+            $html .= '</body></html>';
+        }
+        return $html;
     }
 
     private function render_error(string $message): void
@@ -561,8 +659,66 @@ final class Endpoints
         }
         $dir = rtrim($baseDir, '/') . '/b2b';
         if ($page === 'catalog') {
-            return [$dir . '/catalog.pdf', 'catalog.pdf', 'b2b_catalog_clicked'];
+            [$path, $filename] = $this->resolve_pdf_path($dir, 'catalog');
+            return [$path, $filename, 'b2b_catalog_clicked'];
         }
-        return [$dir . '/pricelist.pdf', 'pricelist.pdf', 'b2b_pricelist_clicked'];
+        [$path, $filename] = $this->resolve_pdf_path($dir, 'pricelist');
+        return [$path, $filename, 'b2b_pricelist_clicked'];
+    }
+
+    /** @return array{0:string,1:string} */
+    private function resolve_pdf_path(string $dir, string $slug): array
+    {
+        $pdfPath = $dir . '/' . $slug . '.pdf';
+        if (file_exists($pdfPath)) {
+            return [$pdfPath, $slug . '.pdf'];
+        }
+        $plainPath = $dir . '/' . $slug;
+        if (file_exists($plainPath)) {
+            return [$plainPath, $slug . '.pdf'];
+        }
+        return ['', $slug . '.pdf'];
+    }
+
+    private function build_public_url(string $page, string $token, bool $download): string
+    {
+        if ($this->rewrites_ok()) {
+            $base = home_url('/b2b/' . $page);
+        } else {
+            $base = add_query_arg(['b2b_doc' => $page], home_url('/'));
+        }
+        $args = ['token' => $token];
+        if ($download) {
+            $args['download'] = '1';
+        }
+        return add_query_arg($args, $base);
+    }
+
+    private function rewrites_ok(): bool
+    {
+        $rules = get_option('rewrite_rules', []);
+        return is_array($rules)
+            && array_key_exists('^b2b/catalog/?$', $rules)
+            && array_key_exists('^b2b/pricelist/?$', $rules);
+    }
+
+    private function render_branded_error(string $title, string $message, string $code): void
+    {
+        status_header(200);
+        nocache_headers();
+        echo '<!doctype html><html><head><meta charset="utf-8"><title>' . esc_html($title) . '</title>';
+        echo '<style>
+            body{margin:0;font-family:Arial,sans-serif;background:#0f0f0f;color:#f5f5f5;}
+            .b2b-wrap{max-width:760px;margin:48px auto;padding:0 20px;}
+            .b2b-card{background:#151515;border:1px solid #2b2b2b;border-radius:16px;padding:28px;}
+            .b2b-title{margin:0 0 12px;font-size:24px;}
+            .b2b-note{font-size:13px;color:#c8c8c8;margin-top:12px;}
+        </style></head><body>';
+        echo '<div class="b2b-wrap"><div class="b2b-card">';
+        echo '<h1 class="b2b-title">' . esc_html($title) . '</h1>';
+        echo '<p>' . esc_html($message) . '</p>';
+        echo '<p class="b2b-note">Diagnostics: ' . esc_html($code) . '</p>';
+        echo '</div></div></body></html>';
+        exit;
     }
 }

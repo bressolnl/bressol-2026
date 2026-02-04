@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 
 final class Installer
 {
-    public const VERSION = '1.3.0';
+    public const VERSION = '1.4.0';
 
     public static function maybe_upgrade(): void
     {
@@ -45,6 +45,7 @@ final class Installer
             billing_address_1 VARCHAR(190) NULL,
             billing_address_2 VARCHAR(190) NULL,
             billing_city VARCHAR(190) NULL,
+            city VARCHAR(120) NULL,
             billing_state VARCHAR(190) NULL,
             billing_postcode VARCHAR(30) NULL,
             billing_country VARCHAR(10) NULL,
@@ -55,6 +56,7 @@ final class Installer
             last_order_at DATETIME NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'active',
             source VARCHAR(20) NOT NULL DEFAULT 'order',
+            source_event_id BIGINT UNSIGNED NULL,
             can_be_profiled TINYINT(1) NOT NULL DEFAULT 1,
             can_receive_marketing TINYINT(1) NOT NULL DEFAULT 1,
             loyalty_enabled TINYINT(1) NOT NULL DEFAULT 0,

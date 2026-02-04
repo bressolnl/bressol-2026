@@ -102,6 +102,11 @@ final class TransferService
                 throw new \RuntimeException('Transfer has no lines.');
             }
 
+            $existingAllocations = $this->count_allocations($transferId);
+            if ($existingAllocations > 0) {
+                throw new \RuntimeException('Transfer already shipped (allocations exist).');
+            }
+
             foreach ($lines as $line) {
                 $lineId = (int) ($line['id'] ?? 0);
                 $productId = (int) ($line['product_id'] ?? 0);
@@ -117,17 +122,11 @@ final class TransferService
 
                 $allocatedQty = 0;
                 $weightedSum = 0;
-                $allocationMeta = [];
                 foreach ($allocations as $allocation) {
                     $lotQty = (int) $allocation['qty'];
                     $unitCogs = (int) ($allocation['unit_cogs_cents'] ?? 0);
                     $allocatedQty += $lotQty;
                     $weightedSum += ($lotQty * $unitCogs);
-                    $allocationMeta[] = [
-                        'lot_id' => (int) $allocation['lot_id'],
-                        'qty' => $lotQty,
-                        'unit_cogs_cents' => $unitCogs,
-                    ];
                 }
 
                 if ($allocatedQty !== $qty) {
@@ -139,15 +138,19 @@ final class TransferService
                     $this->lineRepository->update_unit_cogs($lineId, $derivedUnitCogs);
                 }
 
-                $note = wp_json_encode([
-                    'transfer_id' => $transferId,
-                    'transfer_line_id' => $lineId,
-                    'allocations' => $allocationMeta,
-                ]);
-
                 foreach ($allocations as $allocation) {
                     $lotId = (int) $allocation['lot_id'];
                     $lotQty = (int) $allocation['qty'];
+                    $note = wp_json_encode([
+                        'source' => 'transfer_ship',
+                        'transfer_id' => $transferId,
+                        'transfer_line_id' => $lineId,
+                        'product_id' => $productId,
+                        'lot_id' => $lotId,
+                        'qty' => $lotQty,
+                        'unit_cogs_cents' => (int) ($allocation['unit_cogs_cents'] ?? 0),
+                        'expiry_date' => $allocation['expiry_date'] ?? null,
+                    ]);
                     $this->lotService->decrement_lot(
                         $lotId,
                         $lotQty,
@@ -155,6 +158,19 @@ final class TransferService
                         (string) $transferId,
                         $note ?: 'Transfer ship'
                     );
+
+                $allocationId = $this->insert_allocation([
+                    'transfer_id' => $transferId,
+                    'transfer_line_id' => $lineId,
+                    'product_id' => $productId,
+                    'lot_id_es' => $lotId,
+                    'qty_units' => $lotQty,
+                    'unit_cogs_cents' => (int) ($allocation['unit_cogs_cents'] ?? 0),
+                    'expiry_date' => $allocation['expiry_date'] ?? null,
+                ]);
+                if ($allocationId <= 0) {
+                    throw new \RuntimeException('Failed to create transfer allocation.');
+                }
                 }
             }
 
@@ -185,42 +201,48 @@ final class TransferService
                 throw new \RuntimeException('Transfer is not in shipped status.');
             }
 
-            $movesTable = $wpdb->prefix . 'bressol_lot_moves';
-            $receiptCount = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$movesTable} WHERE ref_type = %s AND ref_id = %s AND type = %s",
-                'transfer',
-                (string) $transferId,
-                'receipt'
-            ));
-            if ($receiptCount > 0) {
-                throw new \RuntimeException('Transfer already received.');
+            $allocations = $this->get_pending_transfer_allocations($transferId);
+            if ($allocations === []) {
+                throw new \RuntimeException('Transfer has no ship allocations.');
             }
 
-            $lines = $this->lineRepository->get_lines($transferId);
-            if ($lines === []) {
-                throw new \RuntimeException('Transfer has no lines.');
-            }
-
-            foreach ($lines as $line) {
-                $lineId = (int) ($line['id'] ?? 0);
-                $productId = (int) ($line['product_id'] ?? 0);
-                $qty = (int) ($line['qty_units'] ?? 0);
-                if ($lineId <= 0 || $productId <= 0 || $qty <= 0) {
-                    throw new \RuntimeException('Invalid transfer line.');
+            foreach ($allocations as $allocation) {
+                $allocationId = (int) ($allocation['id'] ?? 0);
+                $sourceLotId = (int) ($allocation['lot_id'] ?? 0);
+                $qty = (int) ($allocation['qty'] ?? 0);
+                $transferLineId = (int) ($allocation['transfer_line_id'] ?? 0);
+                if ($sourceLotId <= 0 || $qty <= 0) {
+                    throw new \RuntimeException('Invalid transfer allocation.');
                 }
 
-                $unitCogs = $line['unit_cogs_cents'] !== null ? (int) $line['unit_cogs_cents'] : null;
-                if ($unitCogs === null) {
-                    throw new \RuntimeException('Missing unit_cogs_cents for transfer line.');
+                $sourceLot = $this->lotRepository->get_lot_by_id($sourceLotId);
+                if (!$sourceLot) {
+                    throw new \RuntimeException('Source lot not found for transfer.');
                 }
 
-                $unitWeight = $this->resolve_unit_weight($productId, $qty, $line);
+                $productId = (int) ($allocation['product_id'] ?? ($sourceLot['product_id'] ?? 0));
+                if ($productId <= 0) {
+                    throw new \RuntimeException('Missing product_id for allocation.');
+                }
+
+                $unitCogs = isset($allocation['unit_cogs_cents']) && is_numeric($allocation['unit_cogs_cents'])
+                    ? (int) $allocation['unit_cogs_cents']
+                    : (int) ($sourceLot['unit_cogs_cents'] ?? 0);
+                if ($unitCogs <= 0) {
+                    throw new \RuntimeException('Missing unit_cogs_cents for allocation.');
+                }
+
+                $expiryDate = isset($allocation['expiry_date']) && $allocation['expiry_date'] !== ''
+                    ? (string) $allocation['expiry_date']
+                    : ($sourceLot['expiry_date'] ?? null);
+
+                $unitWeight = isset($sourceLot['unit_weight_grams']) ? (int) $sourceLot['unit_weight_grams'] : 0;
 
                 $lotId = $this->lotRepository->create_lot([
                     'product_id' => $productId,
                     'location' => 'NL',
                     'qty_on_hand' => $qty,
-                    'expiry_date' => $line['expiry_date'] ?? null,
+                    'expiry_date' => $expiryDate,
                     'unit_cogs_cents' => $unitCogs,
                     'unit_weight_grams' => $unitWeight,
                     'source' => 'transfer',
@@ -230,8 +252,20 @@ final class TransferService
                     throw new \RuntimeException('Failed to create NL lot.');
                 }
 
+                if ($allocationId > 0) {
+                    $updated = $this->mark_allocation_received($allocationId, $lotId);
+                    if (!$updated) {
+                        throw new \RuntimeException('Failed to update transfer allocation.');
+                    }
+                }
+
                 $note = wp_json_encode([
-                    'transfer_line_id' => $lineId,
+                    'source' => 'transfer_receive',
+                    'transfer_id' => $transferId,
+                    'transfer_line_id' => $transferLineId,
+                    'allocation_id' => $allocationId,
+                    'source_lot_id' => $sourceLotId,
+                    'qty' => $qty,
                 ]);
 
                 $this->lotMoveRepository->add_move(
@@ -271,5 +305,178 @@ final class TransferService
 
         $meta = get_post_meta($productId, '_bressol_unit_weight_grams', true);
         return is_numeric($meta) ? max(0, (int) $meta) : 0;
+    }
+
+    private function insert_allocation(array $data): int
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_transfer_lot_allocations';
+        $payload = [
+            'transfer_id' => (int) ($data['transfer_id'] ?? 0),
+            'transfer_line_id' => (int) ($data['transfer_line_id'] ?? 0),
+            'product_id' => (int) ($data['product_id'] ?? 0),
+            'lot_id_es' => (int) ($data['lot_id_es'] ?? 0),
+            'qty_units' => (int) ($data['qty_units'] ?? 0),
+            'unit_cogs_cents' => (int) ($data['unit_cogs_cents'] ?? 0),
+            'expiry_date' => $data['expiry_date'] ?? null,
+            'created_at' => current_time('mysql'),
+        ];
+
+        if (
+            $payload['transfer_id'] <= 0
+            || $payload['transfer_line_id'] <= 0
+            || $payload['product_id'] <= 0
+            || $payload['lot_id_es'] <= 0
+            || $payload['qty_units'] <= 0
+            || $payload['unit_cogs_cents'] <= 0
+        ) {
+            return 0;
+        }
+
+        $existingId = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$table}
+             WHERE transfer_id = %d AND transfer_line_id = %d AND lot_id_es = %d
+             AND qty_units = %d AND unit_cogs_cents = %d AND expiry_date <=> %s
+             LIMIT 1",
+            $payload['transfer_id'],
+            $payload['transfer_line_id'],
+            $payload['lot_id_es'],
+            $payload['qty_units'],
+            $payload['unit_cogs_cents'],
+            $payload['expiry_date']
+        ));
+        if (is_numeric($existingId) && (int) $existingId > 0) {
+            return (int) $existingId;
+        }
+
+        $inserted = $wpdb->insert($table, $payload, [
+            '%d',
+            '%d',
+            '%d',
+            '%d',
+            '%d',
+            '%d',
+            '%s',
+            '%s',
+        ]);
+
+        if ($inserted === false) {
+            return 0;
+        }
+
+        return (int) $wpdb->insert_id;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function get_transfer_allocations(int $transferId): array
+    {
+        if ($transferId <= 0) {
+            return [];
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_transfer_lot_allocations';
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, transfer_line_id, product_id, lot_id_es, lot_id_nl, qty_units, unit_cogs_cents, expiry_date
+                 FROM {$table} WHERE transfer_id = %d ORDER BY id ASC",
+                $transferId
+            ),
+            ARRAY_A
+        );
+
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $allocations = [];
+        foreach ($rows as $row) {
+            $allocations[] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'transfer_line_id' => (int) ($row['transfer_line_id'] ?? 0),
+                'product_id' => (int) ($row['product_id'] ?? 0),
+                'lot_id' => (int) ($row['lot_id_es'] ?? 0),
+                'lot_id_nl' => isset($row['lot_id_nl']) ? (int) $row['lot_id_nl'] : 0,
+                'qty' => (int) ($row['qty_units'] ?? 0),
+                'unit_cogs_cents' => (int) ($row['unit_cogs_cents'] ?? 0),
+                'expiry_date' => $row['expiry_date'] ?? null,
+            ];
+        }
+
+        return $allocations;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function get_pending_transfer_allocations(int $transferId): array
+    {
+        if ($transferId <= 0) {
+            return [];
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_transfer_lot_allocations';
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, transfer_line_id, product_id, lot_id_es, lot_id_nl, qty_units, unit_cogs_cents, expiry_date
+                 FROM {$table} WHERE transfer_id = %d AND lot_id_nl IS NULL ORDER BY id ASC",
+                $transferId
+            ),
+            ARRAY_A
+        );
+
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $allocations = [];
+        foreach ($rows as $row) {
+            $allocations[] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'transfer_line_id' => (int) ($row['transfer_line_id'] ?? 0),
+                'product_id' => (int) ($row['product_id'] ?? 0),
+                'lot_id' => (int) ($row['lot_id_es'] ?? 0),
+                'lot_id_nl' => isset($row['lot_id_nl']) ? (int) $row['lot_id_nl'] : 0,
+                'qty' => (int) ($row['qty_units'] ?? 0),
+                'unit_cogs_cents' => (int) ($row['unit_cogs_cents'] ?? 0),
+                'expiry_date' => $row['expiry_date'] ?? null,
+            ];
+        }
+
+        return $allocations;
+    }
+
+    private function count_allocations(int $transferId): int
+    {
+        if ($transferId <= 0) {
+            return 0;
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_transfer_lot_allocations';
+        $count = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE transfer_id = %d",
+            $transferId
+        ));
+
+        return $count;
+    }
+
+    private function mark_allocation_received(int $allocationId, int $lotIdNl): bool
+    {
+        if ($allocationId <= 0 || $lotIdNl <= 0) {
+            return false;
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_transfer_lot_allocations';
+        $updated = $wpdb->update(
+            $table,
+            ['lot_id_nl' => $lotIdNl],
+            ['id' => $allocationId],
+            ['%d'],
+            ['%d']
+        );
+
+        return $updated === 1;
     }
 }

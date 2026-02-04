@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 final class Installer
 {
-    public const VERSION = '1.1.0';
+    public const VERSION = '1.2.0';
     private const VERSION_OPTION = 'bressol_inventory_schema_version';
 
     public static function maybe_upgrade(): void
@@ -33,6 +33,7 @@ final class Installer
         $tables[] = Schema::lot_moves_table_sql($wpdb->prefix . 'bressol_lot_moves', $charsetCollate);
         $tables[] = Schema::stock_transfers_table_sql($wpdb->prefix . 'bressol_stock_transfers', $charsetCollate);
         $tables[] = Schema::stock_transfer_lines_table_sql($wpdb->prefix . 'bressol_stock_transfer_lines', $charsetCollate);
+        $tables[] = Schema::transfer_lot_allocations_table_sql($wpdb->prefix . 'bressol_transfer_lot_allocations', $charsetCollate);
 
         foreach ($tables as $tableSql) {
             dbDelta($tableSql);

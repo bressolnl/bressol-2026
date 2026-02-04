@@ -60,6 +60,30 @@ final class TaskRepository
         return $updated !== false;
     }
 
+    /** @param array<string, mixed> $data */
+    public function update(int $taskId, array $data): bool
+    {
+        if ($taskId <= 0) {
+            return false;
+        }
+        $allowed = ['due_at', 'note', 'status', 'assigned_user_id'];
+        $payload = [];
+        $formats = [];
+        foreach ($allowed as $field) {
+            if (!array_key_exists($field, $data)) {
+                continue;
+            }
+            $payload[$field] = $data[$field];
+            $formats[] = $field === 'assigned_user_id' ? '%d' : '%s';
+        }
+        if ($payload === []) {
+            return false;
+        }
+        global $wpdb;
+        $updated = $wpdb->update($this->table(), $payload, ['id' => $taskId], $formats, ['%d']);
+        return $updated !== false;
+    }
+
     public function find_by_id(int $taskId): ?array
     {
         if ($taskId <= 0) {
@@ -207,10 +231,19 @@ final class TaskRepository
     {
         $clauses = [];
         $params = [];
+        global $wpdb;
+        $leadsTable = $wpdb->prefix . 'bressol_b2b_leads';
+        $eventsTable = $wpdb->prefix . 'bressol_b2b_lead_events';
+        $lastTypeSql = $this->last_event_type_sql($leadsTable, $eventsTable);
+        $now = current_time('mysql');
 
         if (!empty($filters['status'])) {
             $clauses[] = 'status = %s';
             $params[] = sanitize_key((string) $filters['status']);
+        }
+        if (!empty($filters['type'])) {
+            $clauses[] = 'type = %s';
+            $params[] = sanitize_key((string) $filters['type']);
         }
         if (!empty($filters['assigned_user_id'])) {
             $clauses[] = 'assigned_user_id = %d';
@@ -224,9 +257,45 @@ final class TaskRepository
             $clauses[] = 'due_at <= %s';
             $params[] = sanitize_text_field((string) $filters['due_to']);
         }
+        if (!empty($filters['overdue'])) {
+            $clauses[] = 'due_at < %s';
+            $params[] = $now;
+            if (empty($filters['status'])) {
+                $clauses[] = 'status = %s';
+                $params[] = 'open';
+            }
+        }
+        if (!empty($filters['due_today'])) {
+            $start = date('Y-m-d 00:00:00', current_time('timestamp'));
+            $end = date('Y-m-d 23:59:59', current_time('timestamp'));
+            $clauses[] = 'due_at >= %s';
+            $params[] = $start;
+            $clauses[] = 'due_at <= %s';
+            $params[] = $end;
+            if (empty($filters['status'])) {
+                $clauses[] = 'status = %s';
+                $params[] = 'open';
+            }
+        }
+        if (!empty($filters['hot_only'])) {
+            $clauses[] = "((type = %s AND status = %s) OR lead_id IN (
+                SELECT id FROM {$leadsTable}
+                WHERE lead_score >= %d OR {$lastTypeSql} IN (%s, %s)
+            ))";
+            $params[] = 'hot_lead_call';
+            $params[] = 'open';
+            $params[] = 35;
+            $params[] = 'pricelist_clicked';
+            $params[] = 'profile_completed';
+        }
 
         $whereSql = $clauses ? 'WHERE ' . implode(' AND ', $clauses) : '';
 
         return [$whereSql, $params];
+    }
+
+    private function last_event_type_sql(string $leadsTable, string $eventsTable): string
+    {
+        return "(SELECT type FROM {$eventsTable} e WHERE e.lead_id = {$leadsTable}.id ORDER BY e.created_at DESC, e.id DESC LIMIT 1)";
     }
 }

@@ -5,6 +5,7 @@ namespace Bressol\Modules\CostMargin\Transport\Services;
 
 use Bressol\Modules\CostMargin\Transport\Repositories\TransportAllocationRepository;
 use Bressol\Modules\CostMargin\Transport\Repositories\TransportSnapshotRepository;
+use Bressol\Modules\Inventory\Lots\Repositories\LotMoveRepository;
 use Bressol\Modules\Inventory\Lots\Repositories\LotRepository;
 use Bressol\Modules\Inventory\Transfers\Repositories\TransferLineRepository;
 
@@ -18,17 +19,20 @@ final class TransportAllocator
     private TransportAllocationRepository $allocationRepository;
     private TransferLineRepository $lineRepository;
     private LotRepository $lotRepository;
+    private LotMoveRepository $lotMoveRepository;
 
     public function __construct(
         ?TransportSnapshotRepository $snapshotRepository = null,
         ?TransportAllocationRepository $allocationRepository = null,
         ?TransferLineRepository $lineRepository = null,
-        ?LotRepository $lotRepository = null
+        ?LotRepository $lotRepository = null,
+        ?LotMoveRepository $lotMoveRepository = null
     ) {
         $this->snapshotRepository = $snapshotRepository ?? new TransportSnapshotRepository();
         $this->allocationRepository = $allocationRepository ?? new TransportAllocationRepository();
         $this->lineRepository = $lineRepository ?? new TransferLineRepository();
         $this->lotRepository = $lotRepository ?? new LotRepository();
+        $this->lotMoveRepository = $lotMoveRepository ?? new LotMoveRepository();
     }
 
     public function create_snapshot(int $transferId, int $totalCostCents, ?int $createdBy = null, ?string $note = null): int
@@ -46,6 +50,8 @@ final class TransportAllocator
         if ($snapshotId <= 0) {
             throw new \RuntimeException('Unable to create transport snapshot.');
         }
+
+        $this->recalculate_allocations($snapshotId);
 
         return $snapshotId;
     }
@@ -106,7 +112,7 @@ final class TransportAllocator
 
                 $weightTotal = $this->resolve_weight_total($qty, $line, $lotId);
                 if ($weightTotal <= 0) {
-                    throw new \RuntimeException('Invalid weight total for allocation.');
+                    $weightTotal = $qty;
                 }
 
                 $allocations[] = [
@@ -150,15 +156,86 @@ final class TransportAllocator
             throw new \RuntimeException('Invalid snapshot id.');
         }
 
-        $snapshot = $this->snapshotRepository->get_by_id($snapshotId);
-        if (!$snapshot) {
-            throw new \RuntimeException('Snapshot not found.');
-        }
-        if (($snapshot['status'] ?? '') !== 'draft') {
-            throw new \RuntimeException('Snapshot is already closed.');
-        }
+        global $wpdb;
+        $wpdb->query('START TRANSACTION');
 
-        $this->snapshotRepository->set_status($snapshotId, 'closed', current_time('mysql'), $closedBy);
+        try {
+            $snapshot = $this->snapshotRepository->get_by_id($snapshotId, true);
+            if (!$snapshot) {
+                throw new \RuntimeException('Snapshot not found.');
+            }
+            if (($snapshot['status'] ?? '') !== 'draft') {
+                throw new \RuntimeException('Snapshot is already closed.');
+            }
+
+            $transferId = (int) ($snapshot['transfer_id'] ?? 0);
+            $allocations = $this->allocationRepository->get_allocations($snapshotId);
+            if ($allocations === []) {
+                throw new \RuntimeException('No allocations found.');
+            }
+
+            $grouped = [];
+            foreach ($allocations as $allocation) {
+                $lotId = (int) ($allocation['lot_id_nl'] ?? 0);
+                $qty = (int) ($allocation['qty_units'] ?? 0);
+                $cost = (int) ($allocation['allocated_cost_cents'] ?? 0);
+                if ($lotId <= 0 || $qty <= 0) {
+                    throw new \RuntimeException('Invalid allocation data for close.');
+                }
+                if (!isset($grouped[$lotId])) {
+                    $grouped[$lotId] = ['qty' => 0, 'cost' => 0];
+                }
+                $grouped[$lotId]['qty'] += $qty;
+                $grouped[$lotId]['cost'] += $cost;
+            }
+
+            foreach ($grouped as $lotId => $data) {
+                $totalQty = (int) ($data['qty'] ?? 0);
+                $totalCost = (int) ($data['cost'] ?? 0);
+                if ($totalQty <= 0) {
+                    continue;
+                }
+                $unitDelta = (int) floor($totalCost / $totalQty);
+                if ($unitDelta < 0) {
+                    $unitDelta = 0;
+                }
+
+                if ($unitDelta > 0) {
+                    $updated = $this->lotRepository->increment_unit_cogs((int) $lotId, $unitDelta);
+                    if (!$updated) {
+                        throw new \RuntimeException('Failed to update lot cost.');
+                    }
+                }
+
+                $note = wp_json_encode([
+                    'source' => 'transport_alloc',
+                    'snapshot_id' => $snapshotId,
+                    'transfer_id' => $transferId,
+                    'lot_id' => (int) $lotId,
+                    'qty_units' => $totalQty,
+                    'allocated_total_cents' => $totalCost,
+                    'unit_delta_cents' => $unitDelta,
+                ]);
+
+                $moveId = $this->lotMoveRepository->add_move(
+                    (int) $lotId,
+                    'cogs_adjust',
+                    0,
+                    'transfer',
+                    (string) $transferId,
+                    $note ?: null
+                );
+                if ($moveId <= 0) {
+                    throw new \RuntimeException('Failed to log transport allocation.');
+                }
+            }
+
+            $this->snapshotRepository->set_status($snapshotId, 'closed', current_time('mysql'), $closedBy);
+            $wpdb->query('COMMIT');
+        } catch (\Throwable $exception) {
+            $wpdb->query('ROLLBACK');
+            throw $exception;
+        }
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -203,7 +280,13 @@ final class TransportAllocator
     {
         $lineWeight = isset($line['line_weight_total_grams']) ? (int) $line['line_weight_total_grams'] : 0;
         if ($lineWeight > 0) {
-            return $lineWeight;
+            $lineTotalQty = isset($line['qty_units']) ? (int) $line['qty_units'] : 0;
+            if ($lineTotalQty > 0) {
+                $prorated = (int) round($lineWeight * ($qty / $lineTotalQty));
+                if ($prorated > 0) {
+                    return $prorated;
+                }
+            }
         }
 
         $override = isset($line['unit_weight_override_grams']) ? (int) $line['unit_weight_override_grams'] : 0;

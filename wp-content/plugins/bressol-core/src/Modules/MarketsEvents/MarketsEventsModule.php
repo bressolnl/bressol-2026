@@ -12,6 +12,7 @@ use Bressol\Modules\MarketsEvents\Repositories\EventRepository;
 use Bressol\Modules\MarketsEvents\Services\EventService;
 use Bressol\Modules\MarketsEvents\Services\OrderEventMetaService;
 use Bressol\Modules\MarketsEvents\Services\PosEventContextService;
+use Bressol\Modules\MarketsEvents\Services\EventCompletionService;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -23,6 +24,8 @@ final class MarketsEventsModule implements ModuleInterface
     {
         add_action('admin_init', [Installer::class, 'maybe_upgrade']);
         add_action('admin_init', [Capabilities::class, 'ensure_caps_registered']);
+        (new EventCompletionService())->register();
+        EventCompletionService::schedule();
 
         (new UpcomingEventsShortcode())->register();
 

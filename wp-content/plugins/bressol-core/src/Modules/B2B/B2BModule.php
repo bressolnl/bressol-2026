@@ -27,6 +27,7 @@ final class B2BModule implements ModuleInterface
         add_filter('query_vars', [$endpoints, 'register_query_vars']);
         add_action('template_redirect', [$endpoints, 'handle_request']);
         add_action('admin_init', [$endpoints, 'maybe_flush_rewrite']);
+        add_shortcode('bressol_b2b_signup', [$endpoints, 'render_signup_shortcode']);
 
         $reminders = new ReminderService();
         add_action('init', [$reminders, 'schedule']);

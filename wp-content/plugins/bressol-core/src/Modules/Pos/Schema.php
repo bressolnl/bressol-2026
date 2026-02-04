@@ -44,4 +44,23 @@ final class Schema
             KEY used_at (used_at)
         ) {$charsetCollate};";
     }
+
+    public static function bundle_picks_table_sql(string $table, string $charsetCollate): string
+    {
+        return "CREATE TABLE {$table} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            sale_id BIGINT UNSIGNED NOT NULL,
+            parent_line_key VARCHAR(64) NOT NULL,
+            picked_product_id BIGINT UNSIGNED NOT NULL,
+            picked_sku VARCHAR(64) NOT NULL,
+            qty INT NOT NULL DEFAULT 1,
+            event_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY sale_line_sku (sale_id, parent_line_key, picked_sku),
+            KEY sale_id (sale_id),
+            KEY parent_line_key (parent_line_key),
+            KEY event_id (event_id)
+        ) {$charsetCollate};";
+    }
 }

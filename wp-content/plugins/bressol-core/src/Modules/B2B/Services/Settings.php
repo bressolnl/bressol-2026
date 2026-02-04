@@ -22,6 +22,7 @@ final class Settings
             'sales_owner_user_id_2' => 0,
             'last_assigned_owner_user_id' => 0,
             'tier_options' => ['wholesale', 'horeca', 'corporate', 'other'],
+            'signup_page_id' => 0,
         ];
 
         $stored = get_option(self::OPTION_NAME, []);
@@ -43,6 +44,26 @@ final class Settings
         $settings = $this->get_settings();
         $ttl = isset($settings['token_ttl_days']) ? (int) $settings['token_ttl_days'] : 30;
         return max(1, $ttl);
+    }
+
+    public function get_signup_page_id(): int
+    {
+        $settings = $this->get_settings();
+        return isset($settings['signup_page_id']) ? (int) $settings['signup_page_id'] : 0;
+    }
+
+    public function get_signup_page_url(): string
+    {
+        $pageId = $this->get_signup_page_id();
+        if ($pageId <= 0) {
+            return '';
+        }
+        $post = get_post($pageId);
+        if (!$post || $post->post_type !== 'page' || $post->post_status !== 'publish') {
+            return '';
+        }
+        $url = get_permalink($pageId);
+        return $url ? (string) $url : '';
     }
 
     /** @return string[] */
@@ -132,6 +153,9 @@ final class Settings
         }
         if (array_key_exists('tier_options', $payload) && is_array($payload['tier_options'])) {
             $settings['tier_options'] = $payload['tier_options'];
+        }
+        if (array_key_exists('signup_page_id', $payload)) {
+            $settings['signup_page_id'] = max(0, (int) $payload['signup_page_id']);
         }
 
         update_option(self::OPTION_NAME, $settings, false);

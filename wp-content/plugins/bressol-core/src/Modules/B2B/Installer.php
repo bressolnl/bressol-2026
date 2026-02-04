@@ -12,14 +12,23 @@ if (!defined('ABSPATH')) {
 
 final class Installer
 {
-    public const VERSION = '0.1.5';
+    public const VERSION = '0.1.7';
     private const VERSION_OPTION = 'bressol_b2b_schema_version';
+    private const REWRITES_OPTION = 'bressol_b2b_rewrites_version';
 
     public static function maybe_upgrade(): void
     {
         $installed = (string) get_option(self::VERSION_OPTION, '');
         if ($installed === '' || version_compare($installed, self::VERSION, '<')) {
             (new self())->install();
+        }
+        if (!is_admin()) {
+            return;
+        }
+        $rewritesVersion = (string) get_option(self::REWRITES_OPTION, '');
+        if ($rewritesVersion !== self::VERSION) {
+            flush_rewrite_rules(false);
+            update_option(self::REWRITES_OPTION, self::VERSION, false);
         }
     }
 
@@ -56,6 +65,8 @@ final class Installer
             owner_user_id BIGINT UNSIGNED NOT NULL,
             lead_score INT NOT NULL DEFAULT 0,
             last_activity_at DATETIME NULL,
+            sales_stage VARCHAR(30) NULL,
+            next_followup_at DATETIME NULL,
             consent_token VARCHAR(64) NOT NULL,
             consent_token_created_at DATETIME NOT NULL,
             consent_token_expires_at DATETIME NOT NULL,
@@ -106,7 +117,7 @@ final class Installer
         (new Settings())->ensure_defaults();
         (new Capabilities())->seed_admin_cap();
 
-        update_option('bressol_b2b_flush_needed', '1', false);
+        update_option(self::REWRITES_OPTION, self::VERSION, false);
         update_option(self::VERSION_OPTION, self::VERSION, false);
     }
 

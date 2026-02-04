@@ -1,26 +1,117 @@
 @layer sections {
-    .bressol-home .bressol-shortcuts__grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 20px;
+    .bressol-shortcuts {
+      background: var(--bressol-ivory);
     }
-
-    .bressol-home .bressol-shortcut-card {
-        padding: 24px;
-        border-radius: var(--bressol-radius-md);
-        background: #fff;
-        border: 1px solid var(--bressol-ink-10);
-        display: grid;
-        gap: 12px;
-        min-height: 180px;
+  
+    .bressol-shortcuts .bressol-section__header {
+      margin-bottom: 36px;
     }
-
-    .bressol-home .bressol-shortcut-card__title {
-        font-size: 1.25rem;
+  
+    .bressol-shortcuts__grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 22px;
     }
-
-    .bressol-home .bressol-shortcut-card__cta {
-        font-weight: 600;
-        color: var(--bressol-gold);
+  
+    /* Card */
+    .bressol-shortcut-card {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      border-radius: var(--bressol-radius-lg);
+      background: #fff;
+      border: 1px solid rgba(7, 12, 12, 0.10);
+      box-shadow: 0 10px 22px rgba(7, 12, 12, 0.06);
+      overflow: hidden;
+      transition: transform var(--bressol-duration-med) var(--bressol-ease),
+                  box-shadow var(--bressol-duration-med) var(--bressol-ease),
+                  border-color var(--bressol-duration-med) var(--bressol-ease);
     }
-}
+  
+    .bressol-shortcut-card__media {
+      height: 240px;
+      position: relative;
+      overflow: hidden;
+      background: rgba(7, 12, 12, 0.02);
+    }
+  
+    /* Placeholder más “mediterráneo” (oliva/arena) */
+    .bressol-shortcut-card__media-inner {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background:
+        radial-gradient(80% 70% at 70% 35%, rgba(188,175,74,0.22), transparent 55%),
+        radial-gradient(60% 60% at 35% 70%, rgba(7,12,12,0.10), transparent 60%),
+        linear-gradient(135deg, rgba(84,96,76,0.18), rgba(246,242,232,0.65));
+      transform: scale(1);
+      transition: transform var(--bressol-duration-med) var(--bressol-ease);
+    }
+  
+    .bressol-shortcut-card__body {
+      padding: 18px 18px 20px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+  
+    .bressol-shortcut-card__title {
+      font-size: 1.35rem;
+      line-height: 1.15;
+      letter-spacing: 0.015em;
+    }
+  
+    .bressol-shortcut-card__copy {
+      color: rgba(7,12,12,0.70);
+      font-size: 0.95rem;
+      line-height: 1.45;
+      max-width: 40ch;
+    }
+  
+    .bressol-shortcut-card__cta {
+      margin-top: 4px;
+      font-family: var(--bressol-font-sans);
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: rgba(7,12,12,0.72);
+      transition: color var(--bressol-duration-fast) var(--bressol-ease);
+    }
+  
+    /* Hover/focus premium */
+    .bressol-shortcut-card:hover,
+    .bressol-shortcut-card:focus-visible {
+      transform: translateY(-2px);
+      box-shadow: var(--bressol-shadow-md);
+      border-color: rgba(188,175,74,0.35);
+    }
+  
+    .bressol-shortcut-card:hover .bressol-shortcut-card__cta,
+    .bressol-shortcut-card:focus-visible .bressol-shortcut-card__cta {
+      color: var(--bressol-gold);
+    }
+  
+    .bressol-shortcut-card:hover .bressol-shortcut-card__media-inner,
+    .bressol-shortcut-card:focus-visible .bressol-shortcut-card__media-inner {
+      transform: scale(1.02);
+    }
+  
+    .bressol-shortcut-card:focus-visible {
+      outline: 2px solid rgba(188,175,74,0.35);
+      outline-offset: 2px;
+    }
+  
+    /* Responsive */
+    @media (max-width: 1100px) {
+      .bressol-shortcuts__grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .bressol-shortcut-card__media { height: 220px; }
+    }
+  
+    @media (max-width: 640px) {
+      .bressol-shortcuts__grid {
+        grid-template-columns: 1fr;
+        gap: 18px;
+      }
+      .bressol-shortcut-card__media { height: 200px; }
+    }
+  }

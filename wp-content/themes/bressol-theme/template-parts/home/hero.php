@@ -7,48 +7,72 @@ $slides = $args['data'] ?? [];
 $total = is_array($slides) ? count($slides) : 0;
 ?>
 
-<section class="bressol-section bressol-hero" data-bressol-slider>
-    <div class="bressol-container bressol-hero__inner">
-        <div class="bressol-hero__content">
+<section class="bressol-section bressol-hero" data-bressol-slider tabindex="0" aria-roledescription="carousel">
+    <div class="bressol-hero__inner">
+        <div class="bressol-hero__slides">
             <?php if ($total > 0) : ?>
                 <?php foreach ($slides as $index => $slide) : ?>
-                    <?php
-                    $title = isset($slide['title']) ? (string) $slide['title'] : '';
-                    $copy = isset($slide['copy']) ? (string) $slide['copy'] : '';
-                    $primary = $slide['primary_cta'] ?? [];
-                    $secondary = $slide['secondary_cta'] ?? [];
-                    $ratio = isset($slide['image_ratio']) ? (string) $slide['image_ratio'] : '16 / 9';
-                    ?>
-                    <article class="bressol-hero__slide" data-bressol-slide>
-                        <h1 class="bressol-hero__title"><?php echo esc_html($title); ?></h1>
-                        <p class="bressol-hero__copy"><?php echo esc_html($copy); ?></p>
-                        <div class="bressol-hero__cta">
-                            <a class="bressol-button" href="<?php echo esc_url($primary['url'] ?? '#'); ?>">
-                                <?php echo esc_html($primary['label'] ?? 'Ontdek'); ?>
-                            </a>
-                            <a class="bressol-button bressol-button--ghost" href="<?php echo esc_url($secondary['url'] ?? '#'); ?>">
-                                <?php echo esc_html($secondary['label'] ?? 'Lees meer'); ?>
-                            </a>
-                        </div>
-                        <div class="bressol-hero__media" style="aspect-ratio: <?php echo esc_attr($ratio); ?>">
-                            <span class="bressol-media-placeholder" aria-hidden="true"></span>
+                <?php
+                $secondary = $slide['secondary_cta'] ?? [];
+                $desktop_image = isset($slide['desktop_image']) ? (string) $slide['desktop_image'] : '';
+                $mobile_image = isset($slide['mobile_image']) ? (string) $slide['mobile_image'] : '';
+                $base_uri = get_stylesheet_directory_uri();
+                $desktop_src = $desktop_image !== '' ? $base_uri . $desktop_image : '';
+                $mobile_src = $mobile_image !== '' ? $base_uri . $mobile_image : $desktop_src;
+                $slide_class = 'bressol-hero__slide bressol-hero__slide--' . ($index + 1);
+                if ($index === 0) {
+                    $slide_class .= ' bressol-is-active';
+                }
+                ?>
+                <article
+                    class="<?php echo esc_attr($slide_class); ?>"
+                    data-bressol-slide
+                    style="--bressol-hero-image: url('<?php echo esc_url($desktop_src); ?>'); --bressol-hero-image-mobile: url('<?php echo esc_url($mobile_src); ?>');"
+                >
+                    <picture class="bressol-hero__image" aria-hidden="true">
+                        <?php if ($desktop_src !== '') : ?>
+                            <source media="(min-width: 900px)" srcset="<?php echo esc_url($desktop_src); ?>">
+                        <?php endif; ?>
+                        <?php if ($mobile_src !== '') : ?>
+                            <img src="<?php echo esc_url($mobile_src); ?>" alt="" decoding="async">
+                        <?php endif; ?>
+                    </picture>
+                        <div class="bressol-container bressol-hero__content">
+                            <span class="bressol-hero__micro">A TAULA</span>
+                            <h1 class="bressol-hero__title">Jouw moment, op z&rsquo;n Valenciaans.</h1>
+                            <p class="bressol-hero__copy">Een tafel vol kleine hapjes. Een glas. Even samen.</p>
+                            <div class="bressol-hero__cta">
+                                <a class="bressol-button" href="#momenten">Ontdek momenten</a>
+                                <a class="bressol-button bressol-button--ghost" href="<?php echo esc_url($secondary['url'] ?? '#'); ?>">
+                                    <?php echo esc_html($secondary['label'] ?? 'Shop'); ?>
+                                </a>
+                            </div>
                         </div>
                     </article>
                 <?php endforeach; ?>
             <?php else : ?>
-                <article class="bressol-hero__slide" data-bressol-slide>
-                    <h1 class="bressol-hero__title">Bressol v2</h1>
-                    <p class="bressol-hero__copy">Rustige selectie, mediterrane stijl.</p>
-                    <div class="bressol-hero__cta">
-                        <a class="bressol-button" href="#">Ontdek</a>
-                        <a class="bressol-button bressol-button--ghost" href="#">Lees meer</a>
-                    </div>
-                    <div class="bressol-hero__media" style="aspect-ratio: 16 / 9">
-                        <span class="bressol-media-placeholder" aria-hidden="true"></span>
+                <article
+                    class="bressol-hero__slide bressol-hero__slide--1 bressol-is-active"
+                    data-bressol-slide
+                    style="--bressol-hero-image: url('<?php echo esc_url(get_stylesheet_directory_uri() . '/assets/img/hero/hero-borrel-desktop.svg'); ?>'); --bressol-hero-image-mobile: url('<?php echo esc_url(get_stylesheet_directory_uri() . '/assets/img/hero/hero-borrel-mobile.svg'); ?>');"
+                >
+                    <picture class="bressol-hero__image" aria-hidden="true">
+                        <source media="(min-width: 900px)" srcset="<?php echo esc_url(get_stylesheet_directory_uri() . '/assets/img/hero/hero-borrel-desktop.svg'); ?>">
+                        <img src="<?php echo esc_url(get_stylesheet_directory_uri() . '/assets/img/hero/hero-borrel-mobile.svg'); ?>" alt="" decoding="async">
+                    </picture>
+                    <div class="bressol-container bressol-hero__content">
+                        <span class="bressol-hero__micro">A TAULA</span>
+                        <h1 class="bressol-hero__title">Jouw moment, op z&rsquo;n Valenciaans.</h1>
+                        <p class="bressol-hero__copy">Een tafel vol kleine hapjes. Een glas. Even samen.</p>
+                        <div class="bressol-hero__cta">
+                            <a class="bressol-button" href="#momenten">Ontdek momenten</a>
+                            <a class="bressol-button bressol-button--ghost" href="#">Shop borrel &amp; dranken</a>
+                        </div>
                     </div>
                 </article>
             <?php endif; ?>
         </div>
+
         <div class="bressol-hero__controls">
             <div class="bressol-hero__counter" data-bressol-counter>
                 <span class="bressol-hero__current">01</span>
@@ -59,6 +83,10 @@ $total = is_array($slides) ? count($slides) : 0;
                 <?php for ($i = 0; $i < max(1, $total); $i++) : ?>
                     <button class="bressol-hero__dot" type="button" data-bressol-dot aria-label="<?php echo esc_attr('Slide ' . ($i + 1)); ?>"></button>
                 <?php endfor; ?>
+            </div>
+            <div class="bressol-hero__nav">
+                <button class="bressol-hero__nav-btn" type="button" data-bressol-prev aria-label="Vorige slide">&larr;</button>
+                <button class="bressol-hero__nav-btn" type="button" data-bressol-next aria-label="Volgende slide">&rarr;</button>
             </div>
         </div>
     </div>

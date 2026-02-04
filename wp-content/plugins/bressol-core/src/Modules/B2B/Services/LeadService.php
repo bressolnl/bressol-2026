@@ -5,6 +5,8 @@ namespace Bressol\Modules\B2B\Services;
 
 use Bressol\Modules\B2B\Repositories\LeadEventsRepository;
 use Bressol\Modules\B2B\Repositories\LeadRepository;
+use Bressol\Modules\B2B\Support\Masking;
+use Bressol\Modules\Crm\Services\CustomerService;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -79,9 +81,24 @@ final class LeadService
         $data['owner_user_id'] = isset($payload['owner_user_id']) && (int) $payload['owner_user_id'] > 0
             ? (int) $payload['owner_user_id']
             : (int) ($data['owner_user_id'] ?? $this->settings->get_default_owner_user_id());
+        $newStage = array_key_exists('sales_stage', $payload)
+            ? $this->sanitize_sales_stage((string) $payload['sales_stage'])
+            : ($data['sales_stage'] ?? '');
+        $prevStage = (string) ($data['sales_stage'] ?? '');
+        if ($newStage === '') {
+            $newStage = 'new';
+        }
+        $data['sales_stage'] = $newStage;
+        $data['next_followup_at'] = array_key_exists('next_followup_at', $payload)
+            ? $this->normalize_datetime((string) $payload['next_followup_at'])
+            : ($data['next_followup_at'] ?? null);
 
         if (($data['status'] ?? '') === '') {
             $data['status'] = $this->status_from_contact_basis((string) ($data['contact_basis'] ?? 'no_consent'));
+        }
+
+        if ($newStage !== '' && $newStage !== $prevStage) {
+            $data['last_activity_at'] = $now;
         }
 
         $tokenData = $this->ensure_token($data);
@@ -110,7 +127,7 @@ final class LeadService
 
         if ($leadId > 0) {
             $context = [
-                'email' => $this->mask_email($email),
+                'email' => Masking::mask_email($email),
                 'source' => $data['source'] ?? $source,
             ];
             $this->events->insert_event($leadId, $isNew ? 'lead_created' : 'lead_updated', $context);
@@ -136,10 +153,16 @@ final class LeadService
 
     public function apply_consent(int $leadId): bool
     {
-        return $this->apply_consent_with_task($leadId, 'call_after_consent', 'Bel deze lead (nieuw consent)', 48);
+        return $this->apply_consent_with_task($leadId, 'call_after_consent', 'Bel deze lead (nieuw consent)', 48, 'b2b_consent');
     }
 
-    public function apply_consent_with_task(int $leadId, string $taskType, string $taskNote, int $dueHours): bool
+    public function apply_consent_with_task(
+        int $leadId,
+        string $taskType,
+        string $taskNote,
+        int $dueHours,
+        string $consentSource = 'b2b'
+    ): bool
     {
         if ($leadId <= 0) {
             return false;
@@ -150,32 +173,39 @@ final class LeadService
             return false;
         }
 
-        if (!empty($lead['consented_at'])) {
-            return true;
+        $alreadyConsented = !empty($lead['consented_at']);
+
+        if (!$alreadyConsented) {
+            $now = current_time('mysql');
+            $updated = $this->leads->update($leadId, [
+                'contact_basis' => 'consent_explicit',
+                'status' => 'CONSENTED',
+                'consented_at' => $now,
+                'updated_at' => $now,
+                'last_activity_at' => $now,
+            ]);
+            if (!$updated) {
+                return false;
+            }
+            $this->leads->increment_score($leadId, 5);
         }
 
-        $now = current_time('mysql');
-        $updated = $this->leads->update($leadId, [
-            'contact_basis' => 'consent_explicit',
-            'status' => 'CONSENTED',
-            'consented_at' => $now,
-            'updated_at' => $now,
-            'last_activity_at' => $now,
-        ]);
-        if (!$updated) {
-            return false;
+        if (!$this->events->has_event($leadId, 'consent_given')) {
+            $this->events->insert_event($leadId, 'consent_given', []);
         }
 
-        $this->leads->increment_score($leadId, 5);
-        $this->events->insert_event($leadId, 'consent_given', []);
+        $lead = $this->leads->find_by_id($leadId) ?? $lead;
+        $synced = $this->sync_marketing_consent($lead, $consentSource);
 
         $this->tasks->create_auto_task($leadId, $taskType, $taskNote, $dueHours);
 
-        $espRecentlyQueued = $this->events->has_recent_event($leadId, 'esp_email_queued', 86400);
-        if (!$espRecentlyQueued) {
-            $espSent = (new EspService())->enqueue_b2b_catalog_email($lead, (string) ($lead['consent_token'] ?? ''));
-            if ($espSent) {
-                $this->events->insert_event($leadId, 'esp_email_queued', []);
+        if ($synced) {
+            $espRecentlyQueued = $this->events->has_recent_event($leadId, 'esp_email_queued', 86400);
+            if (!$espRecentlyQueued) {
+                $espSent = (new EspService())->enqueue_b2b_catalog_email($lead, (string) ($lead['consent_token'] ?? ''));
+                if ($espSent) {
+                    $this->events->insert_event($leadId, 'esp_email_queued', []);
+                }
             }
         }
 
@@ -203,8 +233,55 @@ final class LeadService
             return $result;
         }
 
-        $this->apply_consent_with_task($leadId, 'follow_up', 'Follow-up', 48);
+        $this->events->insert_event($leadId, 'signup_submitted', [
+            'source' => 'signup',
+        ]);
+
+        $this->apply_consent_with_task($leadId, 'follow_up', 'Follow-up', 48, 'b2b_signup');
         return $result;
+    }
+
+    /** @param array<string, mixed> $lead */
+    public function sync_marketing_consent(array $lead, string $source): bool
+    {
+        if (!class_exists(CustomerService::class)) {
+            return false;
+        }
+        $email = (string) ($lead['email'] ?? '');
+        if ($email === '' || !is_email($email)) {
+            return false;
+        }
+
+        $service = new CustomerService();
+        $customerId = $service->save_customer([
+            'email' => $email,
+            'customer_type' => 'b2b',
+            'status' => 'active',
+            'can_receive_marketing' => 1,
+            'can_be_profiled' => 1,
+            'loyalty_enabled' => 0,
+        ]);
+        if ($customerId <= 0) {
+            return false;
+        }
+
+        $grantedAt = (string) ($lead['consented_at'] ?? '');
+        if ($grantedAt === '') {
+            $grantedAt = current_time('mysql');
+        }
+
+        global $wpdb;
+        $metaTable = $wpdb->prefix . 'bressol_crm_customer_meta';
+        $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $metaTable));
+        if ($exists !== $metaTable) {
+            return true;
+        }
+
+        $this->upsert_customer_meta($customerId, 'marketing_consent_basis', 'consent_explicit');
+        $this->upsert_customer_meta($customerId, 'marketing_consent_source', $source);
+        $this->upsert_customer_meta($customerId, 'marketing_consent_granted_at', $grantedAt);
+
+        return true;
     }
 
     /** @param array<string, mixed> $payload */
@@ -241,7 +318,7 @@ final class LeadService
         $afterComplete = $this->is_profile_complete($lead);
         if (!$beforeComplete && $afterComplete) {
             $this->events->insert_event($leadId, 'profile_completed', []);
-            $this->tasks->create_auto_task($leadId, 'hot_call', 'HOT lead - call', 24);
+            $this->tasks->create_auto_task($leadId, 'hot_lead_call', 'HOT lead - call', 24);
 
             if ($sendEmail) {
                 $espRecentlyQueued = $this->events->has_recent_event($leadId, 'profile_email_queued', 86400);
@@ -315,12 +392,10 @@ final class LeadService
         if (!$already) {
             $this->leads->increment_score($leadId, $score);
         }
-        if (!$recentEvent || !$already) {
-            $this->leads->update($leadId, [
-                'last_activity_at' => current_time('mysql'),
-                'updated_at' => current_time('mysql'),
-            ]);
-        }
+        $this->leads->update($leadId, [
+            'last_activity_at' => current_time('mysql'),
+            'updated_at' => current_time('mysql'),
+        ]);
     }
 
     /** @param array<string, mixed> $lead
@@ -388,6 +463,39 @@ final class LeadService
         return in_array($type, $allowed, true) ? $type : 'other';
     }
 
+    private function sanitize_sales_stage(string $stage): string
+    {
+        $stage = sanitize_key($stage);
+        $allowed = ['new', 'contacted', 'sample_sent', 'negotiation', 'won', 'lost'];
+        return in_array($stage, $allowed, true) ? $stage : 'new';
+    }
+
+    private function upsert_customer_meta(int $customerId, string $key, string $value): void
+    {
+        if ($customerId <= 0 || $key === '') {
+            return;
+        }
+        global $wpdb;
+        $table = $wpdb->prefix . 'bressol_crm_customer_meta';
+        $existing = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT id FROM {$table} WHERE customer_id = %d AND meta_key = %s LIMIT 1",
+                $customerId,
+                $key
+            )
+        );
+        $payload = [
+            'customer_id' => $customerId,
+            'meta_key' => $key,
+            'meta_value' => sanitize_text_field($value),
+        ];
+        if ($existing) {
+            $wpdb->update($table, ['meta_value' => $payload['meta_value']], ['id' => (int) $existing], ['%s'], ['%d']);
+            return;
+        }
+        $wpdb->insert($table, $payload, ['%d', '%s', '%s']);
+    }
+
     private function sanitize_source(string $source): string
     {
         $source = sanitize_key($source);
@@ -398,6 +506,18 @@ final class LeadService
     {
         $tiers = $this->settings->get_tier_options();
         return $tiers[0] ?? 'other';
+    }
+
+    private function normalize_datetime(string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value)) {
+            return null;
+        }
+        return $value;
     }
 
     private function status_from_contact_basis(string $basis): string
@@ -423,17 +543,37 @@ final class LeadService
         return sanitize_textarea_field((string) $interests);
     }
 
-    private function mask_email(string $email): string
+    /** @param array<string, mixed> $lead
+     *  @return array{temperature:string,reason:string,stale:bool}
+     */
+    public function compute_temperature(array $lead): array
     {
-        $email = trim($email);
-        if ($email === '' || strpos($email, '@') === false) {
-            return '';
+        $lastEvent = sanitize_key((string) ($lead['last_event_type'] ?? ''));
+        $score = isset($lead['lead_score']) ? (int) $lead['lead_score'] : 0;
+        $lastActivity = (string) ($lead['last_activity_at'] ?? '');
+
+        $stale = false;
+        if ($lastActivity !== '') {
+            $cutoff = current_time('timestamp') - (14 * 86400);
+            $lastTs = strtotime($lastActivity);
+            $stale = $lastTs !== false && $lastTs <= $cutoff;
         }
-        [$local, $domain] = explode('@', $email, 2);
-        $localMasked = substr($local, 0, 1) . str_repeat('*', max(1, strlen($local) - 2)) . substr($local, -1);
-        $domainParts = explode('.', $domain);
-        $domainMasked = substr($domainParts[0], 0, 1) . str_repeat('*', max(1, strlen($domainParts[0]) - 2)) . substr($domainParts[0], -1);
-        $suffix = count($domainParts) > 1 ? '.' . end($domainParts) : '';
-        return $localMasked . '@' . $domainMasked . $suffix;
+
+        $hotEvents = ['pricelist_clicked', 'profile_completed'];
+        if (in_array($lastEvent, $hotEvents, true)) {
+            return ['temperature' => 'HOT', 'reason' => 'event:' . $lastEvent, 'stale' => $stale];
+        }
+        if ($score >= 35) {
+            return ['temperature' => 'HOT', 'reason' => 'score>=35', 'stale' => $stale];
+        }
+        if ($lastEvent === 'catalog_clicked') {
+            return ['temperature' => 'WARM', 'reason' => 'event:catalog_clicked', 'stale' => $stale];
+        }
+        if ($score >= 15) {
+            return ['temperature' => 'WARM', 'reason' => 'score>=15', 'stale' => $stale];
+        }
+
+        return ['temperature' => 'COLD', 'reason' => 'default', 'stale' => $stale];
     }
+
 }

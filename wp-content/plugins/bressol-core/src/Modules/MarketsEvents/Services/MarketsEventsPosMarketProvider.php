@@ -5,6 +5,7 @@ namespace Bressol\Modules\MarketsEvents\Services;
 
 use Bressol\Modules\MarketsEvents\Repositories\EventRepository;
 use Bressol\Modules\Pos\Services\PosMarketProviderInterface;
+use Bressol\Modules\MarketsEvents\Services\PosEventEligibilityService;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -13,26 +14,22 @@ if (!defined('ABSPATH')) {
 final class MarketsEventsPosMarketProvider implements PosMarketProviderInterface
 {
     private EventRepository $repository;
+    private PosEventEligibilityService $eligibilityService;
 
-    public function __construct(?EventRepository $repository = null)
+    public function __construct(?EventRepository $repository = null, ?PosEventEligibilityService $eligibilityService = null)
     {
         $this->repository = $repository ?? new EventRepository();
+        $this->eligibilityService = $eligibilityService ?? new PosEventEligibilityService($this->repository);
     }
 
     public function get_markets_for_pos(): array
     {
-        $events = $this->repository->find_by_filters([
-            'status' => 'confirmed',
-        ], 200, 1);
+        $events = $this->eligibilityService->list_eligible_events(200);
 
         $markets = [];
         foreach ($events as $event) {
             $id = isset($event['id']) ? (int) $event['id'] : 0;
             if ($id <= 0) {
-                continue;
-            }
-            $channels = (string) ($event['channels'] ?? '');
-            if (!in_array($channels, ['pos', 'both'], true)) {
                 continue;
             }
 
